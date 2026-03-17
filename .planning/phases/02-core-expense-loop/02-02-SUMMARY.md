@@ -53,10 +53,10 @@ completed: 2026-03-17
 
 ## Performance
 
-- **Duration:** 1 min
-- **Started:** 2026-03-17T19:27:21Z
-- **Completed:** 2026-03-17T19:28:30Z
-- **Tasks:** 1 of 2 automated (Task 2 is checkpoint:human-verify)
+- **Duration:** ~30 min
+- **Started:** 2026-03-17T19:00:00Z
+- **Completed:** 2026-03-17T19:29:49Z
+- **Tasks:** 2 of 2 complete
 - **Files modified:** 2
 
 ## Accomplishments
@@ -67,12 +67,14 @@ completed: 2026-03-17
 - Error handler catches failures and sends "Waduh, ada error. Coba lagi ya." fallback
 - Non-text messages (stickers, photos) silently ignored
 - Full test suite: 25 tests pass including 3 new formatAmount tests
+- Human-verified in Telegram: expense logging, /hapus deletion, off-topic redirect, and roast behavior all working
 
 ## Task Commits
 
 Each task was committed atomically:
 
 1. **Task 1: Wire index.js message handler with /hapus and Claude routing** - `66d175c` (feat)
+2. **Task 2: Verify end-to-end expense logging in Telegram** - human checkpoint approved
 
 **Plan metadata:** pending final commit
 
@@ -95,10 +97,15 @@ None - all tests passed on first run.
 None for this plan. Bot requires TELEGRAM_TOKEN and ANTHROPIC_API_KEY in .env for Task 2 human verification.
 
 ## Next Phase Readiness
-- Complete end-to-end expense loop implemented
-- Awaiting Task 2 human verification: user types expenses in Telegram, verifies /hapus, off-topic redirect, and roast behavior
-- Once verified, Phase 2 is complete and Phase 3 (expense reporting) can begin
+- Complete end-to-end expense loop implemented and human-verified in Telegram
+- Expense logging, /hapus deletion, off-topic redirect, and roast behavior all confirmed working
+- Phase 2 is complete and Phase 3 (expense reporting) can begin
 
 ---
 *Phase: 02-core-expense-loop*
 *Completed: 2026-03-17*
+
+## Self-Check: PASSED
+
+- FOUND: .planning/phases/02-core-expense-loop/02-02-SUMMARY.md
+- FOUND: commit 66d175c (Task 1 — wire message handler)

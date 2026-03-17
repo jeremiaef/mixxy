@@ -13,7 +13,7 @@ Mixxy is built in three phases that follow its dependency graph. Phase 1 establi
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Runnable bot skeleton, concurrency-safe JSON storage, project scaffolding (completed 2026-03-17)
-- [ ] **Phase 2: Core Expense Loop** - Natural language expense logging with Claude, personality, /hapus
+- [x] **Phase 2: Core Expense Loop** - Natural language expense logging with Claude, personality, /hapus (completed 2026-03-17)
 - [ ] **Phase 3: Commands and Reporting** - /rekap, /budget with alerts, /start, /help, weekly auto-digest
 
 ## Phase Details
@@ -71,5 +71,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 2/2 | Complete   | 2026-03-17 |
-| 2. Core Expense Loop | 1/2 | In Progress|  |
+| 2. Core Expense Loop | 2/2 | Complete   | 2026-03-17 |
 | 3. Commands and Reporting | 0/TBD | Not started | - |

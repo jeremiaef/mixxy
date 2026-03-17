@@ -10,7 +10,7 @@
 - [x] **CORE-01**: User can log an expense by typing naturally in Bahasa Indonesia (e.g. "tadi makan siang 35rb", "bayar grab 22ribu")
 - [x] **CORE-02**: Claude extracts amount, category, and description from free-text input via tool_use API — including Indonesian amount slang (35rb, 1.5jt, 22ribu, dua ratus ribu)
 - [x] **CORE-03**: Bot replies with a short confirmation in casual Bahasa Indonesia after each logged expense
-- [ ] **CORE-04**: User can delete the last logged expense via /hapus command
+- [x] **CORE-04**: User can delete the last logged expense via /hapus command
 
 ### Categorization
 
@@ -83,7 +83,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CORE-01 | Phase 2 | Complete |
 | CORE-02 | Phase 2 | Complete |
 | CORE-03 | Phase 2 | Complete |
-| CORE-04 | Phase 2 | Pending |
+| CORE-04 | Phase 2 | Complete |
 | CATEG-01 | Phase 2 | Complete |
 | CATEG-02 | Phase 3 | Pending |
 | PERS-01 | Phase 2 | Complete |

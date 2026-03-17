@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 03-commands-and-reporting-01-PLAN.md
-last_updated: "2026-03-17T20:30:52.634Z"
+stopped_at: Completed 03-commands-and-reporting-03-PLAN.md
+last_updated: "2026-03-17T20:36:12.187Z"
 last_activity: 2026-03-17 — Roadmap created; 3 phases derived from requirements
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 ---
 
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02-core-expense-loop P02 | 30 | 2 tasks | 2 files |
 | Phase 03-commands-and-reporting P02 | 2 | 2 tasks | 3 files |
 | Phase 03-commands-and-reporting P01 | 2 | 2 tasks | 4 files |
+| Phase 03-commands-and-reporting P03 | 3 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,9 @@ Recent decisions affecting current work:
 - [Phase 03-commands-and-reporting]: buildWeeklySummary returns null (not empty string) for empty periods — cron can skip with simple falsy check
 - [Phase 03-commands-and-reporting]: generateInsight uses max_tokens 512 (not 256) — insight requires more tokens than single-intent classification
 - [Phase 03-commands-and-reporting]: Meta mutex key is '{userId}_meta' distinct from expense mutex '{userId}' — allows concurrent meta+expense writes
+- [Phase 03-commands-and-reporting]: Budget threshold uses strict inequality (curr > 0.8) — exactly 80% does not fire
+- [Phase 03-commands-and-reporting]: checkBudgetAlert called AFTER expense appended — reads monthTotal from storage, subtracts expenseAmount for prevTotal
+- [Phase 03-commands-and-reporting]: budget.js defines local _formatAmount clone — no import from index.js to avoid circular dep risk
 
 ### Pending Todos
 
@@ -99,6 +103,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T20:30:52.632Z
-Stopped at: Completed 03-commands-and-reporting-01-PLAN.md
+Last session: 2026-03-17T20:36:12.183Z
+Stopped at: Completed 03-commands-and-reporting-03-PLAN.md
 Resume file: None

@@ -15,7 +15,7 @@
 ### Categorization
 
 - [x] **CATEG-01**: Bot auto-categorizes every expense into one of the Indonesian-appropriate categories: makan, transport, hiburan, tagihan, kost, pulsa, ojol, jajan, lainnya
-- [ ] **CATEG-02**: User can set a monthly budget limit per category via /budget
+- [x] **CATEG-02**: User can set a monthly budget limit per category via /budget
 
 ### Personality
 
@@ -33,9 +33,9 @@
 ### Budget Alerts
 
 - [x] **BUDG-01**: User can set a monthly budget via /budget command
-- [ ] **BUDG-02**: User can view current budget and spending progress via /budget
-- [ ] **BUDG-03**: Bot warns user when 80% of monthly budget is reached
-- [ ] **BUDG-04**: Bot notifies user when monthly budget is exceeded (100%), with light roast
+- [x] **BUDG-02**: User can view current budget and spending progress via /budget
+- [x] **BUDG-03**: Bot warns user when 80% of monthly budget is reached
+- [x] **BUDG-04**: Bot notifies user when monthly budget is exceeded (100%), with light roast
 
 ### Bot Commands & Onboarding
 
@@ -85,7 +85,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CORE-03 | Phase 2 | Complete |
 | CORE-04 | Phase 2 | Complete |
 | CATEG-01 | Phase 2 | Complete |
-| CATEG-02 | Phase 3 | Pending |
+| CATEG-02 | Phase 3 | Complete |
 | PERS-01 | Phase 2 | Complete |
 | PERS-02 | Phase 2 | Complete |
 | SUMM-01 | Phase 3 | Complete |
@@ -94,9 +94,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SUMM-04 | Phase 3 | Pending |
 | SUMM-05 | Phase 3 | Complete |
 | BUDG-01 | Phase 3 | Complete |
-| BUDG-02 | Phase 3 | Pending |
-| BUDG-03 | Phase 3 | Pending |
-| BUDG-04 | Phase 3 | Pending |
+| BUDG-02 | Phase 3 | Complete |
+| BUDG-03 | Phase 3 | Complete |
+| BUDG-04 | Phase 3 | Complete |
 | BOT-01 | Phase 3 | Pending |
 | BOT-02 | Phase 3 | Pending |
 | BOT-03 | Phase 2 | Complete |

@@ -28,7 +28,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A user expense written to storage appears in the correct per-user JSON file under `data/` and survives a process restart
   4. Concurrent writes from two simulated users do not corrupt either user's data file
   5. `.env.example` exists with `TELEGRAM_TOKEN` and `ANTHROPIC_API_KEY`; `.env` is gitignored
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Project scaffolding, storage module with concurrency-safe writes, and storage tests
+- [ ] 01-02-PLAN.md — Bot entry point with polling and dedup guard, Phase 2 stub files
 
 ### Phase 2: Core Expense Loop
 **Goal**: Users can log expenses in natural Bahasa Indonesia and the bot correctly parses, categorizes, stores, and confirms each one — with personality and delete capability
@@ -62,6 +66,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/TBD | Not started | - |
+| 1. Foundation | 0/2 | Planning complete | - |
 | 2. Core Expense Loop | 0/TBD | Not started | - |
 | 3. Commands and Reporting | 0/TBD | Not started | - |

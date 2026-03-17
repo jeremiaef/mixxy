@@ -114,3 +114,58 @@ describe('storage module', () => {
   });
 
 });
+
+describe('meta storage', () => {
+  // Use the same tmpDataDir and beforeEach/afterEach already declared at file top
+
+  beforeEach(async () => {
+    await fs.mkdir(tmpDataDir, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDataDir, { recursive: true, force: true });
+  });
+
+  it('readMeta returns empty object for nonexistent user', async () => {
+    const { readMeta } = require('../storage.js');
+    const result = await readMeta('metauser999');
+    assert.deepEqual(result, {});
+  });
+
+  it('writeMeta persists budget field', async () => {
+    const { readMeta, writeMeta } = require('../storage.js');
+    await writeMeta('metauser1', { budget: 500000 });
+    const result = await readMeta('metauser1');
+    assert.equal(result.budget, 500000);
+  });
+
+  it('writeMeta overwrites existing meta', async () => {
+    const { readMeta, writeMeta } = require('../storage.js');
+    await writeMeta('metauser2', { budget: 300000 });
+    await writeMeta('metauser2', { budget: 700000 });
+    const result = await readMeta('metauser2');
+    assert.equal(result.budget, 700000);
+  });
+
+  it('concurrent writeMeta for same user serializes correctly', async () => {
+    const { readMeta, writeMeta } = require('../storage.js');
+    await Promise.all([
+      writeMeta('metauser3', { budget: 100000 }),
+      writeMeta('metauser3', { budget: 200000 }),
+    ]);
+    const result = await readMeta('metauser3');
+    assert.ok(result.budget === 100000 || result.budget === 200000, 'one write must win');
+  });
+
+  it('writeMeta and appendExpense use different mutex keys', async () => {
+    const { readMeta, writeMeta, readExpenses, appendExpense } = require('../storage.js');
+    await Promise.all([
+      writeMeta('metauser4', { budget: 500000 }),
+      appendExpense('metauser4', { amount: 35000, category: 'makan', description: 'test' }),
+    ]);
+    const meta = await readMeta('metauser4');
+    const expenses = await readExpenses('metauser4');
+    assert.equal(meta.budget, 500000);
+    assert.equal(expenses.length, 1);
+  });
+});

@@ -55,4 +55,24 @@ async function popExpense(userId) {
   });
 }
 
-module.exports = { readExpenses, appendExpense, popExpense };
+async function readMeta(userId) {
+  const file = path.join(DATA_DIR, `${userId}_meta.json`);
+  try {
+    const raw = await fs.readFile(file, 'utf8');
+    return JSON.parse(raw);
+  } catch (err) {
+    if (err.code === 'ENOENT') return {};
+    throw err;
+  }
+}
+
+async function writeMeta(userId, meta) {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  const mutex = getMutex(`${userId}_meta`);
+  return mutex.runExclusive(async () => {
+    const file = path.join(DATA_DIR, `${userId}_meta.json`);
+    await writeFileAtomic(file, JSON.stringify(meta, null, 2));
+  });
+}
+
+module.exports = { readExpenses, appendExpense, popExpense, readMeta, writeMeta };

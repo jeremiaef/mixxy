@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Phase 2 context gathered
-last_updated: "2026-03-17T19:04:54.911Z"
+stopped_at: Completed 02-core-expense-loop 02-01-PLAN.md
+last_updated: "2026-03-17T19:26:06.015Z"
 last_activity: 2026-03-17 — Roadmap created; 3 phases derived from requirements
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 3
   percent: 0
 ---
 
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 *Updated after each plan completion*
 | Phase 01-foundation P01 | 3 | 1 tasks | 6 files |
 | Phase 01-foundation P02 | 3 | 2 tasks | 6 files |
+| Phase 02-core-expense-loop P01 | 2 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,9 @@ Recent decisions affecting current work:
 - [Phase 01-foundation]: Composite dedup key chatId:messageId used (update_id not on Message object in node-telegram-bot-api)
 - [Phase 01-foundation]: require.main === module guard for testability — bot polls only when run directly, cleaner than NODE_ENV check
 - [Phase 01-foundation]: npm test glob pattern 'tests/*.test.js' (not 'tests/') — Node v24 does not resolve directory paths in --test runner
+- [Phase 02-core-expense-loop]: claude-haiku-4-5 selected for cost and speed — Haiku 3 deprecated April 2026
+- [Phase 02-core-expense-loop]: clientOverride 3rd parameter pattern for CJS-compatible testability without module mocking
+- [Phase 02-core-expense-loop]: Single Anthropic API call does triple duty: intent classification + data extraction + reply generation
 
 ### Pending Todos
 
@@ -81,6 +85,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T19:04:54.908Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-core-expense-loop/02-CONTEXT.md
+Last session: 2026-03-17T19:26:06.012Z
+Stopped at: Completed 02-core-expense-loop 02-01-PLAN.md
+Resume file: None

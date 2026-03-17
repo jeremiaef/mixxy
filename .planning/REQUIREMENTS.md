@@ -7,20 +7,20 @@
 
 ### Core Expense Logging
 
-- [ ] **CORE-01**: User can log an expense by typing naturally in Bahasa Indonesia (e.g. "tadi makan siang 35rb", "bayar grab 22ribu")
-- [ ] **CORE-02**: Claude extracts amount, category, and description from free-text input via tool_use API — including Indonesian amount slang (35rb, 1.5jt, 22ribu, dua ratus ribu)
-- [ ] **CORE-03**: Bot replies with a short confirmation in casual Bahasa Indonesia after each logged expense
+- [x] **CORE-01**: User can log an expense by typing naturally in Bahasa Indonesia (e.g. "tadi makan siang 35rb", "bayar grab 22ribu")
+- [x] **CORE-02**: Claude extracts amount, category, and description from free-text input via tool_use API — including Indonesian amount slang (35rb, 1.5jt, 22ribu, dua ratus ribu)
+- [x] **CORE-03**: Bot replies with a short confirmation in casual Bahasa Indonesia after each logged expense
 - [ ] **CORE-04**: User can delete the last logged expense via /hapus command
 
 ### Categorization
 
-- [ ] **CATEG-01**: Bot auto-categorizes every expense into one of the Indonesian-appropriate categories: makan, transport, hiburan, tagihan, kost, pulsa, ojol, jajan, lainnya
+- [x] **CATEG-01**: Bot auto-categorizes every expense into one of the Indonesian-appropriate categories: makan, transport, hiburan, tagihan, kost, pulsa, ojol, jajan, lainnya
 - [ ] **CATEG-02**: User can set a monthly budget limit per category via /budget
 
 ### Personality
 
-- [ ] **PERS-01**: All bot responses use casual Bahasa Indonesia — "kamu" not "anda", short replies, texting-friend register
-- [ ] **PERS-02**: Bot applies light Cleo-style humor (roast mode) when user overspends — Claude decides when to add humor, always-on
+- [x] **PERS-01**: All bot responses use casual Bahasa Indonesia — "kamu" not "anda", short replies, texting-friend register
+- [x] **PERS-02**: Bot applies light Cleo-style humor (roast mode) when user overspends — Claude decides when to add humor, always-on
 
 ### Summaries & Reporting
 
@@ -41,7 +41,7 @@
 
 - [ ] **BOT-01**: /start command delivers onboarding message with concrete examples of how to log expenses in Bahasa Indonesia
 - [ ] **BOT-02**: /help command lists all available commands with short descriptions in Bahasa Indonesia
-- [ ] **BOT-03**: Bot handles off-topic or unclear messages gracefully — redirects back to finance context without being rude
+- [x] **BOT-03**: Bot handles off-topic or unclear messages gracefully — redirects back to finance context without being rude
 
 ## v2 Requirements
 
@@ -80,14 +80,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CORE-01 | Phase 2 | Pending |
-| CORE-02 | Phase 2 | Pending |
-| CORE-03 | Phase 2 | Pending |
+| CORE-01 | Phase 2 | Complete |
+| CORE-02 | Phase 2 | Complete |
+| CORE-03 | Phase 2 | Complete |
 | CORE-04 | Phase 2 | Pending |
-| CATEG-01 | Phase 2 | Pending |
+| CATEG-01 | Phase 2 | Complete |
 | CATEG-02 | Phase 3 | Pending |
-| PERS-01 | Phase 2 | Pending |
-| PERS-02 | Phase 2 | Pending |
+| PERS-01 | Phase 2 | Complete |
+| PERS-02 | Phase 2 | Complete |
 | SUMM-01 | Phase 3 | Pending |
 | SUMM-02 | Phase 3 | Pending |
 | SUMM-03 | Phase 3 | Pending |
@@ -99,7 +99,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BUDG-04 | Phase 3 | Pending |
 | BOT-01 | Phase 3 | Pending |
 | BOT-02 | Phase 3 | Pending |
-| BOT-03 | Phase 2 | Pending |
+| BOT-03 | Phase 2 | Complete |
 
 **Coverage:**
 - v1 requirements: 20 total

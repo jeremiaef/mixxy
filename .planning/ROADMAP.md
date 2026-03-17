@@ -71,5 +71,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 2/2 | Complete   | 2026-03-17 |
-| 2. Core Expense Loop | 0/2 | Planning complete | - |
+| 2. Core Expense Loop | 1/2 | In Progress|  |
 | 3. Commands and Reporting | 0/TBD | Not started | - |

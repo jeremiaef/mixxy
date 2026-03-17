@@ -61,7 +61,13 @@ Plans:
   3. User types "/start" on first use and receives an onboarding message with concrete Bahasa Indonesia examples of how to log expenses
   4. User types "/help" and sees all available commands with short Bahasa Indonesia descriptions
   5. Every Sunday at 10:00 WIB the bot proactively sends each user a weekly spending digest with Claude-generated suggestions — users who have blocked the bot do not crash the cron job
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — summary.js new module + storage meta (readMeta/writeMeta)
+- [ ] 03-02-PLAN.md — prompts.js REKAP_TOOL + claude.js intent extension
+- [ ] 03-03-PLAN.md — budget.js threshold logic + formatBudgetProgress
+- [ ] 03-04-PLAN.md — index.js full wiring (commands, routing, alerts, cron) + human verify
 
 ## Progress
 
@@ -72,4 +78,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Foundation | 2/2 | Complete   | 2026-03-17 |
 | 2. Core Expense Loop | 2/2 | Complete   | 2026-03-17 |
-| 3. Commands and Reporting | 0/TBD | Not started | - |
+| 3. Commands and Reporting | 0/4 | Not started | - |

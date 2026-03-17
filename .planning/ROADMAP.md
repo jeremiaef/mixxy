@@ -31,8 +31,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 2 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Project scaffolding, storage module with concurrency-safe writes, and storage tests
-- [ ] 01-02-PLAN.md — Bot entry point with polling and dedup guard, Phase 2 stub files
+- [x] 01-01-PLAN.md — Project scaffolding, storage module with concurrency-safe writes, and storage tests
+- [x] 01-02-PLAN.md — Bot entry point with polling and dedup guard, Phase 2 stub files
 
 ### Phase 2: Core Expense Loop
 **Goal**: Users can log expenses in natural Bahasa Indonesia and the bot correctly parses, categorizes, stores, and confirms each one — with personality and delete capability
@@ -45,7 +45,11 @@ Plans:
   4. Bot responses use "kamu", are 1-3 sentences max, and feel like a text from a friend (not a form confirmation)
   5. When a user's spending in a category is noticeably high, the bot includes a light roast in its confirmation reply (Claude decides when — not every message)
   6. Sending an off-topic message (e.g., "siapa presiden Indonesia?") gets a friendly redirect back to expense logging, not a general answer
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Claude integration: system prompt, tool schema, processMessage with TDD tests
+- [ ] 02-02-PLAN.md — Bot wiring: /hapus routing, Claude message handler, end-to-end verification
 
 ### Phase 3: Commands and Reporting
 **Goal**: The complete v1 feature set is live — users can view summaries, set budgets with alerts, get onboarded, and receive a weekly digest every Sunday
@@ -67,5 +71,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 2/2 | Complete   | 2026-03-17 |
-| 2. Core Expense Loop | 0/TBD | Not started | - |
+| 2. Core Expense Loop | 0/2 | Planning complete | - |
 | 3. Commands and Reporting | 0/TBD | Not started | - |

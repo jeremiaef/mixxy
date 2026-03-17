@@ -1,0 +1,27 @@
+{
+  "name": "mixxy",
+  "version": "1.0.0",
+  "description": "Telegram expense tracker bot for Indonesian users",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test tests/",
+    "start": "node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jeremiaef/mixxy.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jeremiaef/mixxy/issues"
+  },
+  "homepage": "https://github.com/jeremiaef/mixxy#readme",
+  "dependencies": {
+    "async-mutex": "^0.5.0",
+    "dotenv": "^17.3.1",
+    "node-telegram-bot-api": "^0.67.0",
+    "write-file-atomic": "^7.0.1"
+  }
+}

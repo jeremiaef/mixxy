@@ -25,8 +25,8 @@
 ### Summaries & Reporting
 
 - [ ] **SUMM-01**: User can request current month expense summary via /rekap command
-- [ ] **SUMM-02**: User can request summaries via natural language (e.g. "rekap bulan ini", "pengeluaran bulan ini berapa?")
-- [ ] **SUMM-03**: User can request weekly summary via natural language (e.g. "rekap minggu ini")
+- [x] **SUMM-02**: User can request summaries via natural language (e.g. "rekap bulan ini", "pengeluaran bulan ini berapa?")
+- [x] **SUMM-03**: User can request weekly summary via natural language (e.g. "rekap minggu ini")
 - [ ] **SUMM-04**: Bot auto-sends a weekly spending digest every Sunday (03:00 UTC / 10:00 WIB) via cron
 - [ ] **SUMM-05**: Summaries include Claude-generated insights and suggestions (not just raw totals)
 
@@ -89,8 +89,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PERS-01 | Phase 2 | Complete |
 | PERS-02 | Phase 2 | Complete |
 | SUMM-01 | Phase 3 | Pending |
-| SUMM-02 | Phase 3 | Pending |
-| SUMM-03 | Phase 3 | Pending |
+| SUMM-02 | Phase 3 | Complete |
+| SUMM-03 | Phase 3 | Complete |
 | SUMM-04 | Phase 3 | Pending |
 | SUMM-05 | Phase 3 | Pending |
 | BUDG-01 | Phase 3 | Pending |

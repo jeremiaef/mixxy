@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Phase 3 context gathered
-last_updated: "2026-03-17T20:04:18.126Z"
+stopped_at: Completed 03-commands-and-reporting-01-PLAN.md
+last_updated: "2026-03-17T20:30:52.634Z"
 last_activity: 2026-03-17 — Roadmap created; 3 phases derived from requirements
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 8
+  completed_plans: 6
   percent: 0
 ---
 
@@ -55,6 +55,8 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02-core-expense-loop P01 | 2 | 2 tasks | 4 files |
 | Phase 02-core-expense-loop P02 | 1 | 1 tasks | 2 files |
 | Phase 02-core-expense-loop P02 | 30 | 2 tasks | 2 files |
+| Phase 03-commands-and-reporting P02 | 2 | 2 tasks | 3 files |
+| Phase 03-commands-and-reporting P01 | 2 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -79,6 +81,12 @@ Recent decisions affecting current work:
 - [Phase 02-core-expense-loop]: formatAmount exported as _formatAmount for direct unit testing without module mocking
 - [Phase 02-core-expense-loop]: /hapus guard placed before processMessage — guarantees no Anthropic API call for delete command
 - [Phase 02-core-expense-loop]: formatAmount exported as _formatAmount for direct unit testing without module mocking
+- [Phase 03-commands-and-reporting]: REKAP_TOOL passed alongside EXPENSE_TOOL — Claude selects tool by name; no regex needed for rekap intent detection
+- [Phase 03-commands-and-reporting]: intent field added to all 4 processMessage return paths (expense, redirect, rekap_bulan, rekap_minggu) for clean consumer branching in index.js
+- [Phase 03-commands-and-reporting]: Tool detection changed from generic tool_use find to name-specific discriminator (b.name === 'log_expense' vs 'report_intent') to handle two-tool API
+- [Phase 03-commands-and-reporting]: buildWeeklySummary returns null (not empty string) for empty periods — cron can skip with simple falsy check
+- [Phase 03-commands-and-reporting]: generateInsight uses max_tokens 512 (not 256) — insight requires more tokens than single-intent classification
+- [Phase 03-commands-and-reporting]: Meta mutex key is '{userId}_meta' distinct from expense mutex '{userId}' — allows concurrent meta+expense writes
 
 ### Pending Todos
 
@@ -91,6 +99,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T20:04:18.124Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-commands-and-reporting/03-CONTEXT.md
+Last session: 2026-03-17T20:30:52.632Z
+Stopped at: Completed 03-commands-and-reporting-01-PLAN.md
+Resume file: None

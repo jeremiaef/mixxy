@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 01-foundation-01-01-PLAN.md
-last_updated: "2026-03-17T18:45:54.773Z"
+stopped_at: Completed 01-foundation-01-02-PLAN.md
+last_updated: "2026-03-17T18:51:00.673Z"
 last_activity: 2026-03-17 — Roadmap created; 3 phases derived from requirements
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -51,6 +51,7 @@ Progress: [░░░░░░░░░░] 0%
 
 *Updated after each plan completion*
 | Phase 01-foundation P01 | 3 | 1 tasks | 6 files |
+| Phase 01-foundation P02 | 3 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -65,6 +66,9 @@ Recent decisions affecting current work:
 - [Init]: CommonJS throughout (node-telegram-bot-api is CJS-only)
 - [Phase 01-foundation]: write-file-atomic v7.0.1 confirmed CJS-compatible with require() in Node 24 — no fallback needed
 - [Phase 01-foundation]: DATA_DIR env var approach chosen for test isolation in storage.js
+- [Phase 01-foundation]: Composite dedup key chatId:messageId used (update_id not on Message object in node-telegram-bot-api)
+- [Phase 01-foundation]: require.main === module guard for testability — bot polls only when run directly, cleaner than NODE_ENV check
+- [Phase 01-foundation]: npm test glob pattern 'tests/*.test.js' (not 'tests/') — Node v24 does not resolve directory paths in --test runner
 
 ### Pending Todos
 
@@ -77,6 +81,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T18:45:54.770Z
-Stopped at: Completed 01-foundation-01-01-PLAN.md
+Last session: 2026-03-17T18:51:00.670Z
+Stopped at: Completed 01-foundation-01-02-PLAN.md
 Resume file: None

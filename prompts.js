@@ -10,7 +10,13 @@ Jika jumlah terasa besar untuk kategorinya, ganti reply dengan roast tajam gaya 
 
 Jika pesan BUKAN pengeluaran: balas teks singkat redirect. JANGAN jawab pertanyaan umum. SELALU kasih contoh pengeluaran (contoh: "Gue cuma bisa bantu catat pengeluaran. Coba: makan siang 35rb"). Boleh tambah emoji.
 
-JANGAN pakai "anda". JANGAN multi-line. JANGAN lebih dari 1 kalimat.`;
+JANGAN pakai "anda". JANGAN multi-line. JANGAN lebih dari 1 kalimat.
+
+Jika pesan = permintaan rekap bulanan (contoh: "rekap bulan ini", "pengeluaran bulan ini berapa?", "bulan ini berapa"):
+panggil tool report_intent dengan type="rekap_bulan". JANGAN panggil log_expense.
+
+Jika pesan = permintaan rekap mingguan (contoh: "rekap minggu ini", "minggu ini berapa?", "seminggu terakhir"):
+panggil tool report_intent dengan type="rekap_minggu". JANGAN panggil log_expense.`;
 
 const EXPENSE_TOOL = {
   name: 'log_expense',
@@ -40,4 +46,20 @@ const EXPENSE_TOOL = {
   }
 };
 
-module.exports = { SYSTEM_PROMPT, EXPENSE_TOOL };
+const REKAP_TOOL = {
+  name: 'report_intent',
+  description: 'Signal that the user wants a spending report, not to log an expense. Call this when the user asks for a summary or recap of their spending.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      type: {
+        type: 'string',
+        enum: ['rekap_bulan', 'rekap_minggu'],
+        description: 'rekap_bulan = current calendar month summary; rekap_minggu = past 7 days summary'
+      }
+    },
+    required: ['type']
+  }
+};
+
+module.exports = { SYSTEM_PROMPT, EXPENSE_TOOL, REKAP_TOOL };

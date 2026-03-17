@@ -55,6 +55,26 @@ const OFFTOPIC_RESPONSE = {
   stop_reason: 'end_turn',
 };
 
+const REKAP_BULAN_RESPONSE = {
+  content: [{
+    type: 'tool_use',
+    id: 'toolu_rekap',
+    name: 'report_intent',
+    input: { type: 'rekap_bulan' },
+  }],
+  stop_reason: 'tool_use',
+};
+
+const REKAP_MINGGU_RESPONSE = {
+  content: [{
+    type: 'tool_use',
+    id: 'toolu_rekap_w',
+    name: 'report_intent',
+    input: { type: 'rekap_minggu' },
+  }],
+  stop_reason: 'tool_use',
+};
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -108,8 +128,8 @@ describe('processMessage', () => {
     await processMessage('user1', 'nasi goreng 35rb', capturingClient);
     assert.equal(capturedArgs.model, 'claude-haiku-4-5', 'wrong model');
     assert.ok(Array.isArray(capturedArgs.tools), 'tools should be an array');
-    assert.equal(capturedArgs.tools.length, 1, 'should have exactly 1 tool');
-    assert.equal(capturedArgs.tools[0].name, 'log_expense', 'tool name should be log_expense');
+    assert.equal(capturedArgs.tools.length, 2, 'should have exactly 2 tools');
+    assert.equal(capturedArgs.tools[0].name, 'log_expense', 'first tool name should be log_expense');
     assert.ok(typeof capturedArgs.system === 'string' && capturedArgs.system.length > 0, 'system prompt should be non-empty string');
   });
 
@@ -119,5 +139,58 @@ describe('processMessage', () => {
       () => processMessage('user1', 'nasi goreng 35rb', throwingClient),
       { message: 'API down' }
     );
+  });
+});
+
+describe('processMessage — rekap intents', () => {
+  it('returns intent rekap_bulan for monthly report tool call', async () => {
+    const mockClient = makeMockClient(REKAP_BULAN_RESPONSE);
+    const result = await processMessage('user1', 'rekap bulan ini', mockClient);
+    assert.equal(result.intent, 'rekap_bulan');
+  });
+
+  it('returns isExpense false for rekap_bulan', async () => {
+    const mockClient = makeMockClient(REKAP_BULAN_RESPONSE);
+    const result = await processMessage('user1', 'rekap bulan ini', mockClient);
+    assert.equal(result.isExpense, false);
+  });
+
+  it('does not return expense or reply for rekap_bulan', async () => {
+    const mockClient = makeMockClient(REKAP_BULAN_RESPONSE);
+    const result = await processMessage('user1', 'rekap bulan ini', mockClient);
+    assert.equal(result.expense, undefined);
+    assert.equal(result.reply, undefined);
+  });
+
+  it('returns intent rekap_minggu for weekly report tool call', async () => {
+    const mockClient = makeMockClient(REKAP_MINGGU_RESPONSE);
+    const result = await processMessage('user1', 'rekap minggu ini', mockClient);
+    assert.equal(result.intent, 'rekap_minggu');
+  });
+
+  it('returns intent expense for expense tool call (backward compat)', async () => {
+    const mockClient = makeMockClient(EXPENSE_RESPONSE);
+    const result = await processMessage('user1', 'nasi goreng 35rb', mockClient);
+    assert.equal(result.intent, 'expense');
+    assert.equal(result.isExpense, true);
+  });
+
+  it('returns intent redirect for off-topic (backward compat)', async () => {
+    const mockClient = makeMockClient(OFFTOPIC_RESPONSE);
+    const result = await processMessage('user1', 'siapa presiden?', mockClient);
+    assert.equal(result.intent, 'redirect');
+    assert.equal(result.isExpense, false);
+  });
+
+  it('passes two tools to Claude API (EXPENSE_TOOL and REKAP_TOOL)', async () => {
+    let capturedTools;
+    const capturingClient = {
+      messages: { create: async (args) => { capturedTools = args.tools; return EXPENSE_RESPONSE; } }
+    };
+    await processMessage('user1', 'nasi goreng 35rb', capturingClient);
+    assert.equal(capturedTools.length, 2, `expected 2 tools, got ${capturedTools.length}`);
+    const names = capturedTools.map(t => t.name);
+    assert.ok(names.includes('log_expense'), 'should include log_expense');
+    assert.ok(names.includes('report_intent'), 'should include report_intent');
   });
 });

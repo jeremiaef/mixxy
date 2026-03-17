@@ -1,10 +1,15 @@
 'use strict';
 require('dotenv').config();
 
+const path = require('path');
+const fs = require('fs').promises;
 const TelegramBot = require('node-telegram-bot-api');
 const storage = require('./storage');
 const { processMessage } = require('./claude');
+const { buildMonthlySummary, buildWeeklySummary } = require('./summary');
+const { checkBudgetAlert, formatBudgetProgress } = require('./budget');
 
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const token = process.env.TELEGRAM_TOKEN;
 if (!token) {
   throw new Error('TELEGRAM_TOKEN not set in .env');
@@ -28,20 +33,50 @@ function formatAmount(amount) {
   return (amount / 1000) + 'rb';
 }
 
+// Static command messages
+const START_MESSAGE = 'Halo! Gue Mixxy, asisten pencatat pengeluaran kamu via Telegram\n\nCaranya gampang banget — tinggal ketik pengeluaran kamu kayak chat biasa:\n\n• "makan siang 35rb"\n• "grab ke kantor 22ribu"\n• "bayar tagihan listrik 150rb"\n• "kopi 25rb"\n\nGue bakal langsung catat, kategoriin, dan kasih tau totalnya.\n\nKetik /help buat lihat semua perintah yang tersedia.';
+
+const HELP_MESSAGE = 'Perintah yang tersedia:\n\n/rekap — lihat rekap pengeluaran bulan ini\n/budget <jumlah> — set budget bulanan (contoh: /budget 500000)\n/budget — lihat progress budget bulan ini\n/hapus — hapus pengeluaran terakhir\n/start — tampilkan pesan selamat datang\n/help — tampilkan perintah ini\n\nAtau tinggal ketik pengeluaran kamu langsung, contoh: "makan 35rb"';
+
+// Discover all known users from data/ directory
+async function discoverUsers() {
+  const files = await fs.readdir(DATA_DIR).catch(() => []);
+  return files
+    .filter(f => f.endsWith('.json') && !f.endsWith('_meta.json'))
+    .map(f => f.replace('.json', ''));
+}
+
 // Only start bot when run directly (not when required by tests)
 if (require.main === module) {
   const bot = new TelegramBot(token, { polling: true });
 
   bot.on('message', async (msg) => {
     if (dedupCheck(msg.chat.id, msg.message_id)) return;
-    if (!msg.text) return; // ignore non-text messages (stickers, photos, etc.)
+    if (!msg.text) return;
 
     const chatId = msg.chat.id;
     const userId = String(chatId);
     const text = msg.text.trim();
 
     try {
-      // /hapus — direct storage, no Claude call
+      // --- Static command guards (no Claude call) ---
+
+      if (text === '/start' || text.startsWith('/start@')) {
+        await bot.sendMessage(chatId, START_MESSAGE);
+        return;
+      }
+
+      if (text === '/help' || text.startsWith('/help@')) {
+        await bot.sendMessage(chatId, HELP_MESSAGE);
+        return;
+      }
+
+      if (text === '/rekap' || text.startsWith('/rekap@')) {
+        const summary = await buildMonthlySummary(userId);
+        await bot.sendMessage(chatId, summary);
+        return;
+      }
+
       if (text === '/hapus' || text.startsWith('/hapus@')) {
         const removed = await storage.popExpense(userId);
         if (removed) {
@@ -53,14 +88,67 @@ if (require.main === module) {
         return;
       }
 
-      // All other messages — route through Claude
+      if (text === '/budget' || text.startsWith('/budget@') || text.startsWith('/budget ')) {
+        const parts = text.split(' ');
+        const arg = parts[1] ? parts[1].trim() : null;
+
+        if (arg) {
+          // /budget <amount> — set budget
+          const amount = parseInt(arg, 10);
+          if (isNaN(amount) || amount <= 0) {
+            await bot.sendMessage(chatId, 'Format salah. Contoh: /budget 500000');
+            return;
+          }
+          const meta = await storage.readMeta(userId);
+          await storage.writeMeta(userId, { ...meta, budget: amount });
+          await bot.sendMessage(chatId, `Budget bulanan kamu disetel ke ${formatAmount(amount)}. Semangat nabungnya!`);
+        } else {
+          // /budget — view progress
+          const meta = await storage.readMeta(userId);
+          if (!meta.budget) {
+            await bot.sendMessage(chatId, 'Belum ada budget yang disetel. Coba: /budget 500000');
+            return;
+          }
+          const expenses = await storage.readExpenses(userId);
+          const now = new Date();
+          const year = now.getUTCFullYear();
+          const month = now.getUTCMonth();
+          const monthTotal = expenses
+            .filter(e => {
+              const d = new Date(e.timestamp);
+              return d.getUTCFullYear() === year && d.getUTCMonth() === month;
+            })
+            .reduce((sum, e) => sum + e.amount, 0);
+          await bot.sendMessage(chatId, formatBudgetProgress(meta.budget, monthTotal));
+        }
+        return;
+      }
+
+      // --- Route through Claude (NLP) ---
       const result = await processMessage(userId, text);
+
+      if (result.intent === 'rekap_bulan') {
+        const summary = await buildMonthlySummary(userId);
+        await bot.sendMessage(chatId, summary);
+        return;
+      }
+
+      if (result.intent === 'rekap_minggu') {
+        const summary = await buildWeeklySummary(userId);
+        await bot.sendMessage(chatId, summary || 'Minggu ini belum ada pengeluaran yang dicatat.');
+        return;
+      }
 
       if (result.isExpense) {
         await storage.appendExpense(userId, result.expense);
+        const finalReply = await checkBudgetAlert(userId, result.expense.amount, result.reply);
+        await bot.sendMessage(chatId, finalReply);
+        return;
       }
 
+      // redirect or unrecognized
       await bot.sendMessage(chatId, result.reply);
+
     } catch (err) {
       console.error('Message handling failed:', err.message);
       await bot.sendMessage(chatId, 'Waduh, ada error. Coba lagi ya.').catch(() => {});
@@ -71,7 +159,32 @@ if (require.main === module) {
     console.error('[polling_error]', err.code, err.message);
   });
 
+  // Weekly digest: every Sunday 03:00 UTC (10:00 WIB)
+  const cron = require('node-cron');
+  cron.schedule('0 3 * * 0', async () => {
+    console.log('[cron] Starting weekly digest...');
+    const userIds = await discoverUsers();
+    for (const uid of userIds) {
+      try {
+        const digest = await buildWeeklySummary(uid);
+        if (digest) {
+          await bot.sendMessage(uid, digest);
+        }
+      } catch (err) {
+        // User blocked bot, chat not found, or API error — log and continue
+        console.error(`[cron] Weekly digest failed for ${uid}:`, err.message);
+      }
+    }
+    console.log(`[cron] Weekly digest complete. Sent to ${userIds.length} users.`);
+  });
+
   console.log('Bot started.');
 }
 
-module.exports = { _dedupCheck: dedupCheck, _processedMessages: processedMessages, _formatAmount: formatAmount };
+module.exports = {
+  _dedupCheck: dedupCheck,
+  _processedMessages: processedMessages,
+  _formatAmount: formatAmount,
+  _START_MESSAGE: START_MESSAGE,
+  _HELP_MESSAGE: HELP_MESSAGE,
+};

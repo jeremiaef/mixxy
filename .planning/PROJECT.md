@@ -12,24 +12,31 @@ Users can track expenses as naturally as texting a friend, in their own language
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ User can report expenses via natural language in Bahasa Indonesia — v1.0 Phase 2
+- ✓ Claude AI extracts amount, category, and description from free-text expense input — v1.0 Phase 2
+- ✓ Bot auto-categorizes expenses (food, transport, entertainment, bills, etc.) — v1.0 Phase 2
+- ✓ User can request expense summaries ("rekap minggu ini", "pengeluaran bulan ini berapa?") — v1.0 Phase 3
+- ✓ Weekly auto-summary sent every Sunday with insights and suggestions (Claude-generated) — v1.0 Phase 3
+- ✓ User can set a monthly budget and get warned when approaching the limit — v1.0 Phase 3
+- ✓ /start command with onboarding message — v1.0 Phase 3
+- ✓ /rekap command for this month's expense summary — v1.0 Phase 3
+- ✓ /budget command to set or view monthly budget (global + per-category) — v1.0 Phase 3
+- ✓ /hapus command to delete the last entry — v1.0 Phase 2
+- ✓ /help command showing available commands — v1.0 Phase 3
+- ✓ Bot personality: casual Bahasa Indonesia, uses "kamu", short responses, light Cleo-style roast when overspending — v1.0 Phase 2
+- ✓ Storage: per-user JSON files keyed by Telegram user ID — v1.0 Phase 1
+- ✓ .env.example with TELEGRAM_TOKEN and ANTHROPIC_API_KEY — v1.0 Phase 1
 
 ### Active
 
-- [ ] User can report expenses via natural language in Bahasa Indonesia (e.g. "tadi makan siang 35rb", "bayar grab 22ribu")
-- [ ] Claude AI extracts amount, category, and description from free-text expense input
-- [ ] Bot auto-categorizes expenses (food, transport, entertainment, bills, etc.)
-- [ ] User can request expense summaries ("rekap minggu ini", "pengeluaran bulan ini berapa?")
-- [ ] Weekly auto-summary sent every Sunday with insights and suggestions (Claude-generated)
-- [ ] User can set a monthly budget and get warned when approaching the limit
-- [ ] /start command with onboarding message
-- [ ] /rekap command for this month's expense summary
-- [ ] /budget command to set or view monthly budget
-- [ ] /hapus command to delete the last entry
-- [ ] /help command showing available commands
-- [ ] Bot personality: casual Bahasa Indonesia, uses "kamu", short responses, light Cleo-style roast when overspending (always-on, bot decides when to apply)
-- [ ] Storage: per-user JSON files keyed by Telegram user ID (supports single user now, multi-user later)
-- [ ] .env.example with TELEGRAM_TOKEN and ANTHROPIC_API_KEY
+## Current Milestone: v1.1 Behavioral Intelligence
+
+**Goal:** Add forward-looking spending intelligence — predict next month's expenses by category from logged history, helping users prepare rather than just review.
+
+**Target features:**
+- `/prediksi` command: predict next month's spend per category (requires ≥30 days history)
+- Fixed vs. variable category classification (Claude-powered)
+- Savings target suggestion based on discretionary spend variance
 
 ### Out of Scope
 
@@ -68,4 +75,4 @@ Users can track expenses as naturally as texting a friend, in their own language
 | IDR only, amount slang handled by Claude | Core market is Indonesian, Claude handles "35rb" natively | — Pending |
 
 ---
-*Last updated: 2026-03-17 after initialization*
+*Last updated: 2026-03-18 after v1.1 milestone start*

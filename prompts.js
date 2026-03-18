@@ -62,4 +62,23 @@ const REKAP_TOOL = {
   }
 };
 
-module.exports = { SYSTEM_PROMPT, EXPENSE_TOOL, REKAP_TOOL };
+const PREDICT_CLASSIFY_TOOL = {
+  name: 'classify_categories',
+  description: 'Classify each expense category as fixed (tetap) or variable (variabel). Fixed = predictable, consistent month-to-month (e.g. rent, subscriptions). Variable = fluctuates with behavior (e.g. food, entertainment).',
+  input_schema: {
+    type: 'object',
+    properties: {
+      classifications: {
+        type: 'object',
+        description: 'Map of category name to label. Every category in the input must appear here.',
+        additionalProperties: {
+          type: 'string',
+          enum: ['tetap', 'variabel']
+        }
+      }
+    },
+    required: ['classifications']
+  }
+};
+
+module.exports = { SYSTEM_PROMPT, EXPENSE_TOOL, REKAP_TOOL, PREDICT_CLASSIFY_TOOL };

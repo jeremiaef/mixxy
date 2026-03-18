@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Phase 4 context gathered
-last_updated: "2026-03-18T09:04:11.071Z"
+stopped_at: Completed 04-prediction-engine-04-01-PLAN.md
+last_updated: "2026-03-18T09:27:50.149Z"
 last_activity: 2026-03-18 — v1.1 roadmap created
 progress:
   total_phases: 5
-  completed_phases: 3
-  total_plans: 9
-  completed_plans: 9
+  completed_phases: 4
+  total_plans: 10
+  completed_plans: 10
 ---
 
 # Project State
@@ -62,6 +62,7 @@ Last activity: 2026-03-18 — v1.1 roadmap created
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 04-prediction-engine P01 | 4 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -105,6 +106,9 @@ Recent decisions affecting current work:
 - [v1.1-roadmap]: Weighted 3-month average: month-1=42%, month-2=33%, month-3=25% (recency bias, industry standard)
 - [v1.1-roadmap]: FIXED_VARIANCE_THRESHOLD = 0.15 as tunable constant — classification: fixed only if 2+ months AND <15% variance; kost hardcoded fixed
 - [v1.1-roadmap]: clientOverride pattern already established — predict.js must accept clientOverride for unit testability without module mocking
+- [Phase 04-prediction-engine]: _options.now injection for deterministic date testing in buildPrediction — avoids global Date mocking
+- [Phase 04-prediction-engine]: activeWindows filter: only months with at least one expense count toward monthsUsed
+- [Phase 04-prediction-engine]: OLD_EXPENSE test fixture must be before m-3 window to avoid polluting monthly totals or inflating monthsUsed
 
 ### Pending Todos
 
@@ -117,7 +121,7 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-18T09:04:11.068Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-prediction-engine/04-CONTEXT.md
+Last session: 2026-03-18T09:27:50.146Z
+Stopped at: Completed 04-prediction-engine-04-01-PLAN.md
+Resume file: None
 Next step: /gsd:plan-phase 4

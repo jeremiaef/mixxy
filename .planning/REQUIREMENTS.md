@@ -48,9 +48,9 @@
 ### Prediction
 
 - [ ] **PRED-01**: User can request next-month spend prediction via /prediksi command
-- [ ] **PRED-02**: /prediksi requires ≥30 days of expense history — returns a friendly explanation (not a prediction) if history is insufficient
-- [ ] **PRED-03**: Prediction shows estimated spend per category for next month, computed from a weighted 3-month average (all arithmetic in JS, not Claude)
-- [ ] **PRED-04**: Categories with fewer than 3 transaction days show "kurang data" instead of an estimate
+- [x] **PRED-02**: /prediksi requires ≥30 days of expense history — returns a friendly explanation (not a prediction) if history is insufficient
+- [x] **PRED-03**: Prediction shows estimated spend per category for next month, computed from a weighted 3-month average (all arithmetic in JS, not Claude)
+- [x] **PRED-04**: Categories with fewer than 3 transaction days show "kurang data" instead of an estimate
 - [ ] **PRED-05**: Each category in the prediction is labeled as fixed (tetap) or variable (variabel) via Claude classification
 - [ ] **PRED-06**: Prediction includes a savings headroom suggestion for the highest-variance variable category, grounded in JS-computed variance
 - [ ] **PRED-07**: All prediction output uses hedged language ("kira-kira", "sekitar", "berdasarkan X bulan terakhir") and shows how many months of data were used
@@ -112,9 +112,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BOT-01 | Phase 3 | Complete |
 | BOT-02 | Phase 3 | Complete |
 | BOT-03 | Phase 2 | Complete |
-| PRED-02 | Phase 4 | Pending |
-| PRED-03 | Phase 4 | Pending |
-| PRED-04 | Phase 4 | Pending |
+| PRED-02 | Phase 4 | Complete |
+| PRED-03 | Phase 4 | Complete |
+| PRED-04 | Phase 4 | Complete |
 | PRED-01 | Phase 5 | Pending |
 | PRED-05 | Phase 5 | Pending |
 | PRED-06 | Phase 5 | Pending |

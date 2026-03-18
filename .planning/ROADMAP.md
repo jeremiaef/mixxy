@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Core Expense Loop** - Natural language expense logging with Claude, personality, /hapus (completed 2026-03-17)
 - [x] **Phase 3: Commands and Reporting** - /rekap, /budget with alerts, /start, /help, weekly auto-digest (completed 2026-03-18)
 - [x] **Phase 4: Prediction Engine** - Pure-JS computation layer: history gate, per-category weighted averages, sparsity detection (completed 2026-03-18)
-- [ ] **Phase 5: Classification and Command Delivery** - Fixed/variable classification via Claude, savings suggestion, /prediksi wired and shipped
+- [x] **Phase 5: Classification and Command Delivery** - Fixed/variable classification via Claude, savings suggestion, /prediksi wired and shipped (completed 2026-03-18)
 
 ## Phase Details
 
@@ -114,4 +114,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Core Expense Loop | 2/2 | Complete | 2026-03-17 |
 | 3. Commands and Reporting | 5/5 | Complete | 2026-03-18 |
 | 4. Prediction Engine | 1/1 | Complete   | 2026-03-18 |
-| 5. Classification and Command Delivery | 1/2 | In Progress|  |
+| 5. Classification and Command Delivery | 2/2 | Complete   | 2026-03-18 |

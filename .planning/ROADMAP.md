@@ -86,7 +86,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 04-01-PLAN.md — TDD: predict.js with history gate, weighted averages, and sparsity detection
+- [x] 04-01-PLAN.md — TDD: predict.js with history gate, weighted averages, and sparsity detection
 
 ### Phase 5: Classification and Command Delivery
 **Goal**: The `/prediksi` command is live — users get a full next-month spend prediction per category, each labeled fixed or variable, with a savings headroom suggestion and hedged language, backed by Claude classification
@@ -97,7 +97,11 @@ Plans:
   2. The prediction includes a savings headroom suggestion that names a specific variable category and quotes JS-computed figures (min, max, average) — Claude does not invent numbers
   3. User types "/prediksi" with fewer than 30 days of history and receives a friendly Bahasa Indonesia explanation that more data is needed — not an error message and not a prediction
   4. "/help" output lists "/prediksi" with a short Bahasa Indonesia description alongside existing commands
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — PREDICT_CLASSIFY_TOOL + classifyPrediction + _formatPrediction with tests
+- [ ] 05-02-PLAN.md — /prediksi command wiring in index.js + HELP_MESSAGE update
 
 ## Progress
 
@@ -110,4 +114,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Core Expense Loop | 2/2 | Complete | 2026-03-17 |
 | 3. Commands and Reporting | 5/5 | Complete | 2026-03-18 |
 | 4. Prediction Engine | 1/1 | Complete   | 2026-03-18 |
-| 5. Classification and Command Delivery | 0/? | Not started | - |
+| 5. Classification and Command Delivery | 0/2 | Not started | - |

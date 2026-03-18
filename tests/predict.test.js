@@ -30,8 +30,9 @@ const DEC_DAY1 = '2025-12-03T08:00:00.000Z';
 const DEC_DAY2 = '2025-12-10T08:00:00.000Z';
 const DEC_DAY3 = '2025-12-17T08:00:00.000Z';
 
-// Old expense >= 90 days ago from NOW (passes 30-day gate)
-const OLD_EXPENSE = '2025-12-01T08:00:00.000Z'; // > 30 days before March 18, 2026
+// Old expense > 30 days ago from NOW, and BEFORE December 2025 (m-3 window)
+// so it does not affect monthly computations. November 2025 is before all 3 active windows.
+const OLD_EXPENSE = '2025-11-15T08:00:00.000Z'; // > 30 days before March 18, 2026; before m-3 (Dec)
 
 describe('_selectMonthWindows helper', () => {
   it('returns [Feb, Jan, Dec] when now is in March 2026', () => {

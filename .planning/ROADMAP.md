@@ -83,7 +83,10 @@ Plans:
   2. Given known fixture data across 3 calendar months, `buildPrediction()` returns per-category estimates matching the expected weighted average (42%/33%/25% recency weighting) to within rounding
   3. A category that appears on fewer than 3 distinct transaction days across the history window returns `"kurang data"` instead of a numeric estimate
   4. Unit tests covering all three behaviors pass with zero Anthropic API calls (pure JS, no Claude dependency in this phase)
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 04-01-PLAN.md — TDD: predict.js with history gate, weighted averages, and sparsity detection
 
 ### Phase 5: Classification and Command Delivery
 **Goal**: The `/prediksi` command is live — users get a full next-month spend prediction per category, each labeled fixed or variable, with a savings headroom suggestion and hedged language, backed by Claude classification
@@ -106,5 +109,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Foundation | 2/2 | Complete | 2026-03-17 |
 | 2. Core Expense Loop | 2/2 | Complete | 2026-03-17 |
 | 3. Commands and Reporting | 5/5 | Complete | 2026-03-18 |
-| 4. Prediction Engine | 0/? | Not started | - |
+| 4. Prediction Engine | 0/1 | Not started | - |
 | 5. Classification and Command Delivery | 0/? | Not started | - |

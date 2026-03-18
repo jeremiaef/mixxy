@@ -26,17 +26,11 @@ Users can track expenses as naturally as texting a friend, in their own language
 - ✓ Bot personality: casual Bahasa Indonesia, uses "kamu", short responses, light Cleo-style roast when overspending — v1.0 Phase 2
 - ✓ Storage: per-user JSON files keyed by Telegram user ID — v1.0 Phase 1
 - ✓ .env.example with TELEGRAM_TOKEN and ANTHROPIC_API_KEY — v1.0 Phase 1
+- ✓ `/prediksi` command: predict next month's spend per category with ≥30 days history gate — v1.0 Phase 5
+- ✓ Fixed vs. variable category classification (Claude-powered via PREDICT_CLASSIFY_TOOL) — v1.0 Phase 5
+- ✓ Savings headroom suggestion based on JS-computed variance of discretionary categories — v1.0 Phase 5
 
 ### Active
-
-## Current Milestone: v1.1 Behavioral Intelligence
-
-**Goal:** Add forward-looking spending intelligence — predict next month's expenses by category from logged history, helping users prepare rather than just review.
-
-**Target features:**
-- `/prediksi` command: predict next month's spend per category (requires ≥30 days history)
-- Fixed vs. variable category classification (Claude-powered)
-- Savings target suggestion based on discretionary spend variance
 
 ### Out of Scope
 
@@ -50,12 +44,14 @@ Users can track expenses as naturally as texting a friend, in their own language
 ## Context
 
 - Node.js project, uses `node-telegram-bot-api` for Telegram integration
-- Claude API (Anthropic) as the AI brain for NLP and summary generation
+- Claude API (Anthropic) as the AI brain for NLP, summary generation, and category classification
 - JSON file storage under a `data/` directory, one file per user ID
-- Clean 4-file structure: `index.js`, `claude.js`, `storage.js`, `prompts.js`
+- 6-module structure: `index.js`, `claude.js`, `storage.js`, `prompts.js`, `summary.js`, `budget.js`, `predict.js`
+- ~1,400 LOC production JS, 99 passing tests; deployed to Railway
 - User will start as sole user, then validate with others — so multi-user architecture is needed from the start
 - Roast mode is always active — Claude decides when spending warrants a light joke
 - Indonesian slang for amounts is common: "35rb" = 35.000 IDR, "22ribu" = 22.000 IDR — Claude must handle this
+- `/prediksi` requires ≥30 days of history; users with less get a friendly prompt to keep logging
 
 ## Constraints
 
@@ -69,10 +65,12 @@ Users can track expenses as naturally as texting a friend, in their own language
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Per-user JSON files keyed by Telegram ID | Simple, multi-user-ready without a database | — Pending |
-| Claude handles all NLP (expense parsing + summary) | Avoids custom regex/NLP logic, leverages LLM strength | — Pending |
-| Roast mode always-on (Claude decides when to apply) | Matches Cleo UX, simpler than user toggle for MVP | — Pending |
-| IDR only, amount slang handled by Claude | Core market is Indonesian, Claude handles "35rb" natively | — Pending |
+| Per-user JSON files keyed by Telegram ID | Simple, multi-user-ready without a database | ✓ Good — works well, no contention issues at current scale |
+| Claude handles all NLP (expense parsing + summary) | Avoids custom regex/NLP logic, leverages LLM strength | ✓ Good — zero parsing failures observed |
+| Roast mode always-on (Claude decides when to apply) | Matches Cleo UX, simpler than user toggle for MVP | ✓ Good — Claude applies it tastefully |
+| IDR only, amount slang handled by Claude | Core market is Indonesian, Claude handles "35rb" natively | ✓ Good — all slang variants parse correctly |
+| Command guard before Claude NLP fallthrough in index.js | Avoids wasted API call when user types a known command | ✓ Good — clean routing pattern, easy to extend |
+| Pure-JS prediction layer before Claude classification | Keeps Claude focused on classification, not arithmetic | ✓ Good — data integrity guaranteed, Claude just labels |
 
 ---
-*Last updated: 2026-03-18 after v1.1 milestone start*
+*Last updated: 2026-03-18 after v1.0 milestone completion*

@@ -8,6 +8,7 @@ const storage = require('./storage');
 const { processMessage } = require('./claude');
 const { buildMonthlySummary, buildWeeklySummary } = require('./summary');
 const { checkBudgetAlert, formatBudgetProgress } = require('./budget');
+const { classifyPrediction, _formatPrediction } = require('./predict');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const token = process.env.TELEGRAM_TOKEN;
@@ -36,7 +37,7 @@ function formatAmount(amount) {
 // Static command messages
 const START_MESSAGE = 'Halo! Gue Mixxy, asisten pencatat pengeluaran kamu via Telegram\n\nCaranya gampang banget — tinggal ketik pengeluaran kamu kayak chat biasa:\n\n• "makan siang 35rb"\n• "grab ke kantor 22ribu"\n• "bayar tagihan listrik 150rb"\n• "kopi 25rb"\n\nGue bakal langsung catat, kategoriin, dan kasih tau totalnya.\n\nKetik /help buat lihat semua perintah yang tersedia.';
 
-const HELP_MESSAGE = 'Perintah yang tersedia:\n\n/rekap — lihat rekap pengeluaran bulan ini\n/budget <jumlah> — set budget bulanan (contoh: /budget 500000 atau /budget makan 200000)\n/budget — lihat progress budget bulan ini\n/hapus — hapus pengeluaran terakhir\n/start — tampilkan pesan selamat datang\n/help — tampilkan perintah ini\n\nAtau tinggal ketik pengeluaran kamu langsung, contoh: "makan 35rb"';
+const HELP_MESSAGE = 'Perintah yang tersedia:\n\n/rekap — lihat rekap pengeluaran bulan ini\n/budget <jumlah> — set budget bulanan (contoh: /budget 500000 atau /budget makan 200000)\n/budget — lihat progress budget bulan ini\n/prediksi — lihat prediksi pengeluaran bulan depan\n/hapus — hapus pengeluaran terakhir\n/start — tampilkan pesan selamat datang\n/help — tampilkan perintah ini\n\nAtau tinggal ketik pengeluaran kamu langsung, contoh: "makan 35rb"';
 
 const VALID_CATEGORIES = ['makan', 'transport', 'hiburan', 'tagihan', 'kost', 'pulsa', 'ojol', 'jajan', 'lainnya'];
 
@@ -76,6 +77,12 @@ if (require.main === module) {
       if (text === '/rekap' || text.startsWith('/rekap@')) {
         const summary = await buildMonthlySummary(userId);
         await bot.sendMessage(chatId, summary);
+        return;
+      }
+
+      if (text === '/prediksi' || text.startsWith('/prediksi@')) {
+        const result = await classifyPrediction(userId);
+        await bot.sendMessage(chatId, _formatPrediction(result));
         return;
       }
 

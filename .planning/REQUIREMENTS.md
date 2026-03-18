@@ -43,6 +43,18 @@
 - [x] **BOT-02**: /help command lists all available commands with short descriptions in Bahasa Indonesia
 - [x] **BOT-03**: Bot handles off-topic or unclear messages gracefully — redirects back to finance context without being rude
 
+## v1.1 Requirements
+
+### Prediction
+
+- [ ] **PRED-01**: User can request next-month spend prediction via /prediksi command
+- [ ] **PRED-02**: /prediksi requires ≥30 days of expense history — returns a friendly explanation (not a prediction) if history is insufficient
+- [ ] **PRED-03**: Prediction shows estimated spend per category for next month, computed from a weighted 3-month average (all arithmetic in JS, not Claude)
+- [ ] **PRED-04**: Categories with fewer than 3 transaction days show "kurang data" instead of an estimate
+- [ ] **PRED-05**: Each category in the prediction is labeled as fixed (tetap) or variable (variabel) via Claude classification
+- [ ] **PRED-06**: Prediction includes a savings headroom suggestion for the highest-variance variable category, grounded in JS-computed variance
+- [ ] **PRED-07**: All prediction output uses hedged language ("kira-kira", "sekitar", "berdasarkan X bulan terakhir") and shows how many months of data were used
+
 ## v2 Requirements
 
 ### Advanced Reporting
@@ -108,4 +120,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 after roadmap creation*
+*Last updated: 2026-03-18 after v1.1 milestone definition*

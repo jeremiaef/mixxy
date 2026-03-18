@@ -49,7 +49,7 @@ describe('static command messages', () => {
     assert.ok(hasExample, `START_MESSAGE should contain expense example with amount: ${_START_MESSAGE}`);
   });
 
-  it('HELP_MESSAGE contains all 5 commands', () => {
+  it('HELP_MESSAGE contains all 6 commands', () => {
     const { _HELP_MESSAGE } = require('../index.js');
     assert.ok(typeof _HELP_MESSAGE === 'string', 'HELP_MESSAGE should be a string');
     assert.ok(_HELP_MESSAGE.includes('/rekap'), `missing /rekap: ${_HELP_MESSAGE}`);
@@ -57,6 +57,7 @@ describe('static command messages', () => {
     assert.ok(_HELP_MESSAGE.includes('/hapus'), `missing /hapus: ${_HELP_MESSAGE}`);
     assert.ok(_HELP_MESSAGE.includes('/start'), `missing /start: ${_HELP_MESSAGE}`);
     assert.ok(_HELP_MESSAGE.includes('/help'), `missing /help: ${_HELP_MESSAGE}`);
+    assert.ok(_HELP_MESSAGE.includes('/prediksi'), `missing /prediksi: ${_HELP_MESSAGE}`);
   });
 
   it('requiring index.js does not throw (cron inside require.main guard)', () => {

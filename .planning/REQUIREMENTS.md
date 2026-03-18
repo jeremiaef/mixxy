@@ -112,12 +112,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BOT-01 | Phase 3 | Complete |
 | BOT-02 | Phase 3 | Complete |
 | BOT-03 | Phase 2 | Complete |
+| PRED-02 | Phase 4 | Pending |
+| PRED-03 | Phase 4 | Pending |
+| PRED-04 | Phase 4 | Pending |
+| PRED-01 | Phase 5 | Pending |
+| PRED-05 | Phase 5 | Pending |
+| PRED-06 | Phase 5 | Pending |
+| PRED-07 | Phase 5 | Pending |
 
 **Coverage:**
-- v1 requirements: 20 total
-- Mapped to phases: 20
-- Unmapped: 0
+- v1 requirements: 20 total — mapped to phases: 20 — unmapped: 0
+- v1.1 requirements: 7 total — mapped to phases: 7 — unmapped: 0
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-18 after v1.1 milestone definition*
+*Last updated: 2026-03-18 after v1.1 roadmap creation (phases 4-5)*

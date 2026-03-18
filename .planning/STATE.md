@@ -5,12 +5,12 @@ milestone_name: Behavioral Intelligence
 status: planning
 stopped_at: —
 last_updated: "2026-03-18"
-last_activity: 2026-03-18 — Milestone v1.1 started
+last_activity: 2026-03-18 — v1.1 roadmap created (phases 4-5)
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 9
-  completed_plans: 9
+  total_phases: 2
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
   percent: 0
 ---
 
@@ -18,36 +18,29 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-17)
+See: .planning/PROJECT.md (updated 2026-03-18)
 
 **Core value:** Users can track expenses as naturally as texting a friend, in Bahasa Indonesia, without opening any app
-**Current focus:** Phase 1 — Foundation
+**Current focus:** Phase 4 — Prediction Engine
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-18 — Milestone v1.1 started
+Phase: 4 — Prediction Engine
+Plan: Not started
+Status: Roadmap created, awaiting phase planning
+Last activity: 2026-03-18 — v1.1 roadmap created
 
 ## Performance Metrics
 
-**Velocity:**
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
+**Velocity (v1.0 reference):**
+- Total plans completed: 9 (v1.0)
+- Average duration: ~5-30 min per plan
+- Total execution time: ~1 day
 
-**By Phase:**
+**By Phase (v1.0):**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
-
-**Recent Trend:**
-- Last 5 plans: none yet
-- Trend: -
-
-*Updated after each plan completion*
 | Phase 01-foundation P01 | 3 | 1 tasks | 6 files |
 | Phase 01-foundation P02 | 3 | 2 tasks | 6 files |
 | Phase 02-core-expense-loop P01 | 2 | 2 tasks | 4 files |
@@ -58,6 +51,18 @@ Last activity: 2026-03-18 — Milestone v1.1 started
 | Phase 03-commands-and-reporting P03 | 3 | 1 tasks | 2 files |
 | Phase 03-commands-and-reporting P04 | 30 | 2 tasks | 2 files |
 | Phase 03-commands-and-reporting P05 | 5 | 2 tasks | 3 files |
+
+**v1.1 Plans (current milestone):**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| - | - | - | - |
+
+**Recent Trend:**
+- Last 5 plans: none yet (v1.1)
+- Trend: -
+
+*Updated after each plan completion*
 
 ## Accumulated Context
 
@@ -80,8 +85,6 @@ Recent decisions affecting current work:
 - [Phase 02-core-expense-loop]: Single Anthropic API call does triple duty: intent classification + data extraction + reply generation
 - [Phase 02-core-expense-loop]: /hapus guard placed before processMessage — guarantees no Anthropic API call for delete command
 - [Phase 02-core-expense-loop]: formatAmount exported as _formatAmount for direct unit testing without module mocking
-- [Phase 02-core-expense-loop]: /hapus guard placed before processMessage — guarantees no Anthropic API call for delete command
-- [Phase 02-core-expense-loop]: formatAmount exported as _formatAmount for direct unit testing without module mocking
 - [Phase 03-commands-and-reporting]: REKAP_TOOL passed alongside EXPENSE_TOOL — Claude selects tool by name; no regex needed for rekap intent detection
 - [Phase 03-commands-and-reporting]: intent field added to all 4 processMessage return paths (expense, redirect, rekap_bulan, rekap_minggu) for clean consumer branching in index.js
 - [Phase 03-commands-and-reporting]: Tool detection changed from generic tool_use find to name-specific discriminator (b.name === 'log_expense' vs 'report_intent') to handle two-tool API
@@ -96,18 +99,26 @@ Recent decisions affecting current work:
 - [Phase 03-commands-and-reporting]: detectThreshold boundary changed from curr > 0.8 to curr >= 0.8 — exact 80% now fires alert
 - [Phase 03-commands-and-reporting]: Per-category budgets stored in meta.budgets map coexisting with global meta.budget for backward compat
 - [Phase 03-commands-and-reporting]: checkBudgetAlert lookup priority: per-category (meta.budgets[cat]) > global (meta.budget) > no-op
+- [v1.1-roadmap]: predict.js is a read-only consumer of storage.js — never writes; same contract as summary.js
+- [v1.1-roadmap]: All aggregation (monthly totals, weighted average, variance) computed in JS before Claude call — Claude receives only pre-computed numbers
+- [v1.1-roadmap]: PREDICT_CLASSIFY_TOOL uses tool_choice: required for structured fixed/variable output — same pattern as claude.js
+- [v1.1-roadmap]: 30-day history gate is necessary but per-category also requires 3+ distinct transaction days — both gates required
+- [v1.1-roadmap]: Weighted 3-month average: month-1=42%, month-2=33%, month-3=25% (recency bias, industry standard)
+- [v1.1-roadmap]: FIXED_VARIANCE_THRESHOLD = 0.15 as tunable constant — classification: fixed only if 2+ months AND <15% variance; kost hardcoded fixed
+- [v1.1-roadmap]: clientOverride pattern already established — predict.js must accept clientOverride for unit testability without module mocking
 
 ### Pending Todos
 
-None yet.
+- [Todo]: Monthly spend prediction for behavioral intelligence (v1.1 milestone — see PRED-01 through PRED-07)
 
 ### Blockers/Concerns
 
-- [Research]: Verify current Anthropic model IDs before Phase 2 — model IDs change with releases (check docs.anthropic.com/en/docs/models-overview)
-- [Research]: Verify npm package versions before Phase 1 — research is from Aug 2025 training data
+- [Research]: Verify current Anthropic model IDs before Phase 4 Claude integration — model IDs change with releases (check docs.anthropic.com/en/docs/models-overview)
+- [Research]: WIB timezone boundary accuracy — current UTC approach may misattribute late-night expenses to wrong month; acceptable for MVP, flag for v1.2
 
 ## Session Continuity
 
-Last session: 2026-03-18T07:56:32.076Z
-Stopped at: Completed 03-commands-and-reporting-05-PLAN.md
+Last session: 2026-03-18
+Stopped at: v1.1 roadmap created
 Resume file: None
+Next step: /gsd:plan-phase 4

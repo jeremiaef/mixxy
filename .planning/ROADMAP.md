@@ -2,7 +2,9 @@
 
 ## Overview
 
-Mixxy is built in three phases that follow its dependency graph. Phase 1 establishes the runnable bot skeleton and concurrency-safe storage layer — the foundation everything else writes into. Phase 2 proves the core product hypothesis: that natural language expense logging in Bahasa Indonesia works reliably end-to-end. Phase 3 completes v1 by adding all commands, summaries, budgeting, and the weekly auto-digest. Nothing in Phase 3 can be trusted if Phase 2 is fragile, and Phase 2 cannot write safely without Phase 1.
+Mixxy is built in phases that follow its dependency graph. Phases 1-3 (v1.0) are complete. Phase 1 established the runnable bot skeleton and storage layer. Phase 2 proved the core expense logging hypothesis. Phase 3 completed v1 commands, summaries, budgeting, and weekly digest.
+
+The v1.1 milestone adds behavioral intelligence in two phases. Phase 4 builds the pure-JS prediction data layer — aggregation, history gate, and sparsity handling — testable in isolation before any Claude call. Phase 5 adds Claude-powered fixed/variable classification, savings headroom suggestion, and wires the `/prediksi` command into the live bot. No new dependencies are needed; both phases build on patterns already proven in `summary.js`, `claude.js`, and `budget.js`.
 
 ## Phases
 
@@ -14,7 +16,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Runnable bot skeleton, concurrency-safe JSON storage, project scaffolding (completed 2026-03-17)
 - [x] **Phase 2: Core Expense Loop** - Natural language expense logging with Claude, personality, /hapus (completed 2026-03-17)
-- [x] **Phase 3: Commands and Reporting** - /rekap, /budget with alerts, /start, /help, weekly auto-digest (completed 2026-03-17)
+- [x] **Phase 3: Commands and Reporting** - /rekap, /budget with alerts, /start, /help, weekly auto-digest (completed 2026-03-18)
+- [ ] **Phase 4: Prediction Engine** - Pure-JS computation layer: history gate, per-category weighted averages, sparsity detection
+- [ ] **Phase 5: Classification and Command Delivery** - Fixed/variable classification via Claude, savings suggestion, /prediksi wired and shipped
 
 ## Phase Details
 
@@ -48,8 +52,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Claude integration: system prompt, tool schema, processMessage with TDD tests
-- [ ] 02-02-PLAN.md — Bot wiring: /hapus routing, Claude message handler, end-to-end verification
+- [x] 02-01-PLAN.md — Claude integration: system prompt, tool schema, processMessage with TDD tests
+- [x] 02-02-PLAN.md — Bot wiring: /hapus routing, Claude message handler, end-to-end verification
 
 ### Phase 3: Commands and Reporting
 **Goal**: The complete v1 feature set is live — users can view summaries, set budgets with alerts, get onboarded, and receive a weekly digest every Sunday
@@ -61,21 +65,46 @@ Plans:
   3. User types "/start" on first use and receives an onboarding message with concrete Bahasa Indonesia examples of how to log expenses
   4. User types "/help" and sees all available commands with short Bahasa Indonesia descriptions
   5. Every Sunday at 10:00 WIB the bot proactively sends each user a weekly spending digest with Claude-generated suggestions — users who have blocked the bot do not crash the cron job
-**Plans**: 4 plans
+**Plans**: 5 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — summary.js new module + storage meta (readMeta/writeMeta)
-- [ ] 03-02-PLAN.md — prompts.js REKAP_TOOL + claude.js intent extension
-- [ ] 03-03-PLAN.md — budget.js threshold logic + formatBudgetProgress
-- [ ] 03-04-PLAN.md — index.js full wiring (commands, routing, alerts, cron) + human verify
+- [x] 03-01-PLAN.md — summary.js new module + storage meta (readMeta/writeMeta)
+- [x] 03-02-PLAN.md — prompts.js REKAP_TOOL + claude.js intent extension
+- [x] 03-03-PLAN.md — budget.js threshold logic + formatBudgetProgress
+- [x] 03-04-PLAN.md — index.js full wiring (commands, routing, alerts, cron) + human verify
+- [x] 03-05-PLAN.md — per-category /budget command
+
+### Phase 4: Prediction Engine
+**Goal**: A pure-JS `predict.js` module correctly aggregates expense history into per-category projections — with a 30-day history gate, weighted 3-month averaging, and sparse-category detection — before any Claude call is made
+**Depends on**: Phase 3
+**Requirements**: PRED-02, PRED-03, PRED-04
+**Success Criteria** (what must be TRUE):
+  1. Calling `buildPrediction(userId)` for a user with fewer than 30 days of history returns a structured result indicating insufficient data — no projection is generated
+  2. Given known fixture data across 3 calendar months, `buildPrediction()` returns per-category estimates matching the expected weighted average (42%/33%/25% recency weighting) to within rounding
+  3. A category that appears on fewer than 3 distinct transaction days across the history window returns `"kurang data"` instead of a numeric estimate
+  4. Unit tests covering all three behaviors pass with zero Anthropic API calls (pure JS, no Claude dependency in this phase)
+**Plans**: TBD
+
+### Phase 5: Classification and Command Delivery
+**Goal**: The `/prediksi` command is live — users get a full next-month spend prediction per category, each labeled fixed or variable, with a savings headroom suggestion and hedged language, backed by Claude classification
+**Depends on**: Phase 4
+**Requirements**: PRED-01, PRED-05, PRED-06, PRED-07
+**Success Criteria** (what must be TRUE):
+  1. User types "/prediksi" and receives a per-category prediction listing, each category labeled as "tetap" or "variabel", expressed with hedged language ("kira-kira", "sekitar") and showing how many months of data were used
+  2. The prediction includes a savings headroom suggestion that names a specific variable category and quotes JS-computed figures (min, max, average) — Claude does not invent numbers
+  3. User types "/prediksi" with fewer than 30 days of history and receives a friendly Bahasa Indonesia explanation that more data is needed — not an error message and not a prediction
+  4. "/help" output lists "/prediksi" with a short Bahasa Indonesia description alongside existing commands
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 2/2 | Complete   | 2026-03-17 |
-| 2. Core Expense Loop | 2/2 | Complete   | 2026-03-17 |
-| 3. Commands and Reporting | 5/5 | Complete   | 2026-03-18 |
+| 1. Foundation | 2/2 | Complete | 2026-03-17 |
+| 2. Core Expense Loop | 2/2 | Complete | 2026-03-17 |
+| 3. Commands and Reporting | 5/5 | Complete | 2026-03-18 |
+| 4. Prediction Engine | 0/? | Not started | - |
+| 5. Classification and Command Delivery | 0/? | Not started | - |

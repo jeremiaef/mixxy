@@ -36,7 +36,9 @@ function formatAmount(amount) {
 // Static command messages
 const START_MESSAGE = 'Halo! Gue Mixxy, asisten pencatat pengeluaran kamu via Telegram\n\nCaranya gampang banget — tinggal ketik pengeluaran kamu kayak chat biasa:\n\n• "makan siang 35rb"\n• "grab ke kantor 22ribu"\n• "bayar tagihan listrik 150rb"\n• "kopi 25rb"\n\nGue bakal langsung catat, kategoriin, dan kasih tau totalnya.\n\nKetik /help buat lihat semua perintah yang tersedia.';
 
-const HELP_MESSAGE = 'Perintah yang tersedia:\n\n/rekap — lihat rekap pengeluaran bulan ini\n/budget <jumlah> — set budget bulanan (contoh: /budget 500000)\n/budget — lihat progress budget bulan ini\n/hapus — hapus pengeluaran terakhir\n/start — tampilkan pesan selamat datang\n/help — tampilkan perintah ini\n\nAtau tinggal ketik pengeluaran kamu langsung, contoh: "makan 35rb"';
+const HELP_MESSAGE = 'Perintah yang tersedia:\n\n/rekap — lihat rekap pengeluaran bulan ini\n/budget <jumlah> — set budget bulanan (contoh: /budget 500000 atau /budget makan 200000)\n/budget — lihat progress budget bulan ini\n/hapus — hapus pengeluaran terakhir\n/start — tampilkan pesan selamat datang\n/help — tampilkan perintah ini\n\nAtau tinggal ketik pengeluaran kamu langsung, contoh: "makan 35rb"';
+
+const VALID_CATEGORIES = ['makan', 'transport', 'hiburan', 'tagihan', 'kost', 'pulsa', 'ojol', 'jajan', 'lainnya'];
 
 // Discover all known users from data/ directory
 async function discoverUsers() {
@@ -89,12 +91,41 @@ if (require.main === module) {
       }
 
       if (text === '/budget' || text.startsWith('/budget@') || text.startsWith('/budget ')) {
-        const parts = text.split(' ');
-        const arg = parts[1] ? parts[1].trim() : null;
+        const parts = text.split(/\s+/);
+        const arg1 = parts[1] ? parts[1].trim().toLowerCase() : null;
+        const arg2 = parts[2] ? parts[2].trim() : null;
 
-        if (arg) {
-          // /budget <amount> — set budget
-          const amount = parseInt(arg, 10);
+        if (arg1 && VALID_CATEGORIES.includes(arg1) && arg2) {
+          // /budget makan 200000 — set per-category budget
+          const amount = parseInt(arg2, 10);
+          if (isNaN(amount) || amount <= 0) {
+            await bot.sendMessage(chatId, `Format salah. Contoh: /budget ${arg1} 200000`);
+            return;
+          }
+          const meta = await storage.readMeta(userId);
+          await storage.writeMeta(userId, { ...meta, budgets: { ...meta.budgets, [arg1]: amount } });
+          await bot.sendMessage(chatId, `Budget ${arg1} bulanan kamu disetel ke ${formatAmount(amount)}. Semangat nabungnya!`);
+        } else if (arg1 && VALID_CATEGORIES.includes(arg1)) {
+          // /budget makan — view per-category progress
+          const meta = await storage.readMeta(userId);
+          if (!meta.budgets || meta.budgets[arg1] == null) {
+            await bot.sendMessage(chatId, `Belum ada budget untuk ${arg1}. Coba: /budget ${arg1} 200000`);
+            return;
+          }
+          const expenses = await storage.readExpenses(userId);
+          const now = new Date();
+          const year = now.getUTCFullYear();
+          const month = now.getUTCMonth();
+          const categoryTotal = expenses
+            .filter(e => {
+              const d = new Date(e.timestamp);
+              return d.getUTCFullYear() === year && d.getUTCMonth() === month && e.category === arg1;
+            })
+            .reduce((sum, e) => sum + e.amount, 0);
+          await bot.sendMessage(chatId, formatBudgetProgress(meta.budgets[arg1], categoryTotal, arg1));
+        } else if (arg1) {
+          // /budget 500000 — set global budget
+          const amount = parseInt(arg1, 10);
           if (isNaN(amount) || amount <= 0) {
             await bot.sendMessage(chatId, 'Format salah. Contoh: /budget 500000');
             return;
@@ -103,23 +134,42 @@ if (require.main === module) {
           await storage.writeMeta(userId, { ...meta, budget: amount });
           await bot.sendMessage(chatId, `Budget bulanan kamu disetel ke ${formatAmount(amount)}. Semangat nabungnya!`);
         } else {
-          // /budget — view progress
+          // /budget — view all budgets
           const meta = await storage.readMeta(userId);
-          if (!meta.budget) {
+          const hasGlobal = !!meta.budget;
+          const hasCategories = meta.budgets && Object.keys(meta.budgets).length > 0;
+
+          if (!hasGlobal && !hasCategories) {
             await bot.sendMessage(chatId, 'Belum ada budget yang disetel. Coba: /budget 500000');
             return;
           }
+
           const expenses = await storage.readExpenses(userId);
           const now = new Date();
           const year = now.getUTCFullYear();
           const month = now.getUTCMonth();
-          const monthTotal = expenses
-            .filter(e => {
-              const d = new Date(e.timestamp);
-              return d.getUTCFullYear() === year && d.getUTCMonth() === month;
-            })
-            .reduce((sum, e) => sum + e.amount, 0);
-          await bot.sendMessage(chatId, formatBudgetProgress(meta.budget, monthTotal));
+          const thisMonthExpenses = expenses.filter(e => {
+            const d = new Date(e.timestamp);
+            return d.getUTCFullYear() === year && d.getUTCMonth() === month;
+          });
+
+          const lines = [];
+
+          if (hasGlobal) {
+            const monthTotal = thisMonthExpenses.reduce((sum, e) => sum + e.amount, 0);
+            lines.push(formatBudgetProgress(meta.budget, monthTotal));
+          }
+
+          if (hasCategories) {
+            for (const [cat, limit] of Object.entries(meta.budgets)) {
+              const catTotal = thisMonthExpenses
+                .filter(e => e.category === cat)
+                .reduce((sum, e) => sum + e.amount, 0);
+              lines.push(formatBudgetProgress(limit, catTotal, cat));
+            }
+          }
+
+          await bot.sendMessage(chatId, lines.join('\n'));
         }
         return;
       }
@@ -141,7 +191,7 @@ if (require.main === module) {
 
       if (result.isExpense) {
         await storage.appendExpense(userId, result.expense);
-        const finalReply = await checkBudgetAlert(userId, result.expense.amount, result.reply);
+        const finalReply = await checkBudgetAlert(userId, result.expense.amount, result.expense.category, result.reply);
         await bot.sendMessage(chatId, finalReply);
         return;
       }

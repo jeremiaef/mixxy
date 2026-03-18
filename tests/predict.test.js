@@ -8,7 +8,7 @@ const tmpDataDir = path.join(__dirname, `tmp-predict-${Date.now()}-${Math.random
 process.env.DATA_DIR = tmpDataDir;
 process.env.ANTHROPIC_API_KEY = 'test-key';
 
-const { buildPrediction, _selectMonthWindows, _computeCategories } = require('../predict.js');
+const { buildPrediction, _selectMonthWindows, _computeCategories, classifyPrediction, _formatPrediction } = require('../predict.js');
 const { appendExpense } = require('../storage.js');
 
 // Fixture "now" date: March 18, 2026 at 12:00 UTC
@@ -283,5 +283,278 @@ describe('No-Claude guarantee', () => {
 
     await buildPrediction(userId, { now: NOW }, spyClient);
     assert.equal(called, false, 'No Claude call expected in Phase 4 — predict.js is pure JS');
+  });
+});
+
+describe('PRED-05 — Classification', () => {
+  beforeEach(async () => { await fs.mkdir(tmpDataDir, { recursive: true }); });
+  afterEach(async () => { await fs.rm(tmpDataDir, { recursive: true, force: true }); });
+
+  it('Test 15: classifyPrediction returns classifications.makan from spy and kost=tetap hardcoded; spy not called for kost', async () => {
+    const userId = 'classify-user-15';
+    // Old expense to pass gate
+    await appendExpense(userId, { amount: 1000, category: 'makan', description: 'old', timestamp: OLD_EXPENSE });
+
+    // makan: 3 months x 3 distinct days each
+    await appendExpense(userId, { amount: 20000, category: 'makan', description: 'dec1', timestamp: DEC_DAY1 });
+    await appendExpense(userId, { amount: 20000, category: 'makan', description: 'dec2', timestamp: DEC_DAY2 });
+    await appendExpense(userId, { amount: 20000, category: 'makan', description: 'dec3', timestamp: DEC_DAY3 });
+    await appendExpense(userId, { amount: 26667, category: 'makan', description: 'jan1', timestamp: JAN_DAY1 });
+    await appendExpense(userId, { amount: 26667, category: 'makan', description: 'jan2', timestamp: JAN_DAY2 });
+    await appendExpense(userId, { amount: 26666, category: 'makan', description: 'jan3', timestamp: JAN_DAY3 });
+    await appendExpense(userId, { amount: 33334, category: 'makan', description: 'feb1', timestamp: FEB_DAY1 });
+    await appendExpense(userId, { amount: 33333, category: 'makan', description: 'feb2', timestamp: FEB_DAY2 });
+    await appendExpense(userId, { amount: 33333, category: 'makan', description: 'feb3', timestamp: FEB_DAY3 });
+
+    // kost: 3 months x 3 distinct days each
+    await appendExpense(userId, { amount: 500000, category: 'kost', description: 'kost-dec1', timestamp: DEC_DAY1 });
+    await appendExpense(userId, { amount: 500000, category: 'kost', description: 'kost-dec2', timestamp: DEC_DAY2 });
+    await appendExpense(userId, { amount: 500000, category: 'kost', description: 'kost-dec3', timestamp: DEC_DAY3 });
+    await appendExpense(userId, { amount: 500000, category: 'kost', description: 'kost-jan1', timestamp: JAN_DAY1 });
+    await appendExpense(userId, { amount: 500000, category: 'kost', description: 'kost-jan2', timestamp: JAN_DAY2 });
+    await appendExpense(userId, { amount: 500000, category: 'kost', description: 'kost-jan3', timestamp: JAN_DAY3 });
+    await appendExpense(userId, { amount: 500000, category: 'kost', description: 'kost-feb1', timestamp: FEB_DAY1 });
+    await appendExpense(userId, { amount: 500000, category: 'kost', description: 'kost-feb2', timestamp: FEB_DAY2 });
+    await appendExpense(userId, { amount: 500000, category: 'kost', description: 'kost-feb3', timestamp: FEB_DAY3 });
+
+    let spyCallCount = 0;
+    let spyParams = null;
+    const spyClient = {
+      messages: {
+        create: async (params) => {
+          spyCallCount++;
+          spyParams = params;
+          return {
+            content: [{ type: 'tool_use', name: 'classify_categories', input: { classifications: { makan: 'variabel' } } }]
+          };
+        }
+      }
+    };
+
+    const result = await classifyPrediction(userId, { now: NOW }, spyClient);
+
+    assert.equal(result.sufficient, true);
+    assert.equal(result.classifications.makan, 'variabel');
+    assert.equal(result.classifications.kost, 'tetap');
+    assert.equal(spyCallCount, 1, 'Spy should be called exactly once');
+    assert.ok(spyParams !== null, 'Spy params should be captured');
+    assert.ok(
+      !spyParams.messages[0].content.includes('kost'),
+      'kost should NOT be in Claude prompt — it is hardcoded as tetap'
+    );
+  });
+
+  it('Test 16: classifyPrediction with insufficient data returns { sufficient: false, daysLogged: 10 }', async () => {
+    const userId = 'classify-user-16';
+    // Only 1 expense from 10 days ago — does not pass 30-day gate
+    const tenDaysAgo = new Date(NOW.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString();
+    await appendExpense(userId, { amount: 50000, category: 'makan', description: 'test', timestamp: tenDaysAgo });
+
+    let spyCalled = false;
+    const spyClient = {
+      messages: { create: async () => { spyCalled = true; return { content: [] }; } }
+    };
+
+    const result = await classifyPrediction(userId, { now: NOW }, spyClient);
+
+    assert.equal(result.sufficient, false);
+    assert.equal(typeof result.daysLogged, 'number');
+    assert.equal(result.daysLogged, 10);
+    assert.equal(spyCalled, false, 'Spy should NOT be called when data is insufficient');
+  });
+
+  it('Test 17: kurang data categories are NOT sent to Claude spy — only numeric categories included', async () => {
+    const userId = 'classify-user-17';
+    // Old expense to pass gate
+    await appendExpense(userId, { amount: 1000, category: 'makan', description: 'old', timestamp: OLD_EXPENSE });
+
+    // makan: 3 distinct days in Feb (passes sparsity gate) => numeric
+    await appendExpense(userId, { amount: 33334, category: 'makan', description: 'feb1', timestamp: FEB_DAY1 });
+    await appendExpense(userId, { amount: 33333, category: 'makan', description: 'feb2', timestamp: FEB_DAY2 });
+    await appendExpense(userId, { amount: 33333, category: 'makan', description: 'feb3', timestamp: FEB_DAY3 });
+
+    // transport: only 2 distinct days in Feb => kurang data (should NOT be sent to Claude)
+    await appendExpense(userId, { amount: 15000, category: 'transport', description: 't1', timestamp: FEB_DAY1 });
+    await appendExpense(userId, { amount: 15000, category: 'transport', description: 't2', timestamp: FEB_DAY2 });
+
+    let spyParams = null;
+    const spyClient = {
+      messages: {
+        create: async (params) => {
+          spyParams = params;
+          return {
+            content: [{ type: 'tool_use', name: 'classify_categories', input: { classifications: { makan: 'variabel' } } }]
+          };
+        }
+      }
+    };
+
+    await classifyPrediction(userId, { now: NOW }, spyClient);
+
+    assert.ok(spyParams !== null, 'Spy should have been called');
+    assert.ok(
+      spyParams.messages[0].content.includes('makan'),
+      'makan (numeric) should be in Claude prompt'
+    );
+    assert.ok(
+      !spyParams.messages[0].content.includes('transport'),
+      'transport (kurang data) should NOT be in Claude prompt'
+    );
+  });
+});
+
+describe('PRED-06 — Savings headroom', () => {
+  beforeEach(async () => { await fs.mkdir(tmpDataDir, { recursive: true }); });
+  afterEach(async () => { await fs.rm(tmpDataDir, { recursive: true, force: true }); });
+
+  it('Test 18: With 3 months of variable category data, savings contains correct min/avg/headroom', async () => {
+    const userId = 'savings-user-18';
+    // Old expense to pass gate
+    await appendExpense(userId, { amount: 1000, category: 'makan', description: 'old', timestamp: OLD_EXPENSE });
+
+    // makan: Dec=60000, Jan=80000, Feb=100000 — 3 distinct days each month
+    await appendExpense(userId, { amount: 20000, category: 'makan', description: 'dec1', timestamp: DEC_DAY1 });
+    await appendExpense(userId, { amount: 20000, category: 'makan', description: 'dec2', timestamp: DEC_DAY2 });
+    await appendExpense(userId, { amount: 20000, category: 'makan', description: 'dec3', timestamp: DEC_DAY3 });
+    await appendExpense(userId, { amount: 26667, category: 'makan', description: 'jan1', timestamp: JAN_DAY1 });
+    await appendExpense(userId, { amount: 26667, category: 'makan', description: 'jan2', timestamp: JAN_DAY2 });
+    await appendExpense(userId, { amount: 26666, category: 'makan', description: 'jan3', timestamp: JAN_DAY3 });
+    await appendExpense(userId, { amount: 33334, category: 'makan', description: 'feb1', timestamp: FEB_DAY1 });
+    await appendExpense(userId, { amount: 33333, category: 'makan', description: 'feb2', timestamp: FEB_DAY2 });
+    await appendExpense(userId, { amount: 33333, category: 'makan', description: 'feb3', timestamp: FEB_DAY3 });
+
+    const spyClient = {
+      messages: {
+        create: async () => ({
+          content: [{ type: 'tool_use', name: 'classify_categories', input: { classifications: { makan: 'variabel' } } }]
+        })
+      }
+    };
+
+    const result = await classifyPrediction(userId, { now: NOW }, spyClient);
+
+    assert.ok(result.savings !== null, 'savings should not be null');
+    assert.equal(result.savings.category, 'makan');
+    assert.equal(result.savings.min, 60000); // Dec total
+    assert.equal(result.savings.avg, 80000); // (60000+80000+100000)/3 = 80000
+    assert.equal(result.savings.headroom, 20000); // avg - min = 80000 - 60000
+  });
+
+  it('Test 19: With only 1 active window for a variable category, savings is null', async () => {
+    const userId = 'savings-user-19';
+    // Old expense to pass gate
+    await appendExpense(userId, { amount: 1000, category: 'makan', description: 'old', timestamp: OLD_EXPENSE });
+
+    // makan: only Feb (1 window — 3 distinct days, passes sparsity)
+    await appendExpense(userId, { amount: 33334, category: 'makan', description: 'feb1', timestamp: FEB_DAY1 });
+    await appendExpense(userId, { amount: 33333, category: 'makan', description: 'feb2', timestamp: FEB_DAY2 });
+    await appendExpense(userId, { amount: 33333, category: 'makan', description: 'feb3', timestamp: FEB_DAY3 });
+
+    const spyClient = {
+      messages: {
+        create: async () => ({
+          content: [{ type: 'tool_use', name: 'classify_categories', input: { classifications: { makan: 'variabel' } } }]
+        })
+      }
+    };
+
+    const result = await classifyPrediction(userId, { now: NOW }, spyClient);
+
+    assert.equal(result.savings, null, 'savings should be null with only 1 active window');
+  });
+
+  it('Test 20: savings.category is the variable category with highest variance', async () => {
+    const userId = 'savings-user-20';
+    // Old expense to pass gate
+    await appendExpense(userId, { amount: 1000, category: 'makan', description: 'old', timestamp: OLD_EXPENSE });
+
+    // makan: low variance — Dec=90k, Jan=95k, Feb=100k (range=10k)
+    await appendExpense(userId, { amount: 30000, category: 'makan', description: 'mdec1', timestamp: DEC_DAY1 });
+    await appendExpense(userId, { amount: 30000, category: 'makan', description: 'mdec2', timestamp: DEC_DAY2 });
+    await appendExpense(userId, { amount: 30000, category: 'makan', description: 'mdec3', timestamp: DEC_DAY3 });
+    await appendExpense(userId, { amount: 31667, category: 'makan', description: 'mjan1', timestamp: JAN_DAY1 });
+    await appendExpense(userId, { amount: 31667, category: 'makan', description: 'mjan2', timestamp: JAN_DAY2 });
+    await appendExpense(userId, { amount: 31666, category: 'makan', description: 'mjan3', timestamp: JAN_DAY3 });
+    await appendExpense(userId, { amount: 33334, category: 'makan', description: 'mfeb1', timestamp: FEB_DAY1 });
+    await appendExpense(userId, { amount: 33333, category: 'makan', description: 'mfeb2', timestamp: FEB_DAY2 });
+    await appendExpense(userId, { amount: 33333, category: 'makan', description: 'mfeb3', timestamp: FEB_DAY3 });
+
+    // hiburan: high variance — Dec=20k, Jan=60k, Feb=80k (range=60k)
+    await appendExpense(userId, { amount: 6667, category: 'hiburan', description: 'hdec1', timestamp: DEC_DAY1 });
+    await appendExpense(userId, { amount: 6667, category: 'hiburan', description: 'hdec2', timestamp: DEC_DAY2 });
+    await appendExpense(userId, { amount: 6666, category: 'hiburan', description: 'hdec3', timestamp: DEC_DAY3 });
+    await appendExpense(userId, { amount: 20000, category: 'hiburan', description: 'hjan1', timestamp: JAN_DAY1 });
+    await appendExpense(userId, { amount: 20000, category: 'hiburan', description: 'hjan2', timestamp: JAN_DAY2 });
+    await appendExpense(userId, { amount: 20000, category: 'hiburan', description: 'hjan3', timestamp: JAN_DAY3 });
+    await appendExpense(userId, { amount: 26667, category: 'hiburan', description: 'hfeb1', timestamp: FEB_DAY1 });
+    await appendExpense(userId, { amount: 26667, category: 'hiburan', description: 'hfeb2', timestamp: FEB_DAY2 });
+    await appendExpense(userId, { amount: 26666, category: 'hiburan', description: 'hfeb3', timestamp: FEB_DAY3 });
+
+    const spyClient = {
+      messages: {
+        create: async () => ({
+          content: [{ type: 'tool_use', name: 'classify_categories', input: { classifications: { makan: 'variabel', hiburan: 'variabel' } } }]
+        })
+      }
+    };
+
+    const result = await classifyPrediction(userId, { now: NOW }, spyClient);
+
+    assert.equal(result.savings.category, 'hiburan', 'hiburan has higher variance (60k) than makan (10k)');
+  });
+});
+
+describe('PRED-07 — Formatting', () => {
+  it('Test 21: _formatPrediction with sufficient=true produces header with monthsUsed', () => {
+    const output = _formatPrediction({
+      sufficient: true,
+      monthsUsed: 3,
+      categories: { makan: 450000 },
+      classifications: { makan: 'variabel' },
+      savings: null
+    });
+    assert.ok(output.includes('Prediksi bulan depan (berdasarkan 3 bulan terakhir):'), `Expected header in output, got: ${output}`);
+  });
+
+  it('Test 22: _formatPrediction with sufficient=true produces total line with ~Rp', () => {
+    const output = _formatPrediction({
+      sufficient: true,
+      monthsUsed: 3,
+      categories: { makan: 450000 },
+      classifications: { makan: 'variabel' },
+      savings: null
+    });
+    assert.ok(output.includes('Total kira-kira: ~Rp 450rb'), `Expected total line in output, got: ${output}`);
+  });
+
+  it('Test 23: _formatPrediction with sufficient=false and daysLogged=12 contains days message', () => {
+    const output = _formatPrediction({ sufficient: false, daysLogged: 12 });
+    assert.ok(output.includes('Data kamu baru 12 hari'), `Expected days message in output, got: ${output}`);
+    assert.ok(output.includes('butuh minimal 30 hari'), `Expected 30-day mention in output, got: ${output}`);
+  });
+
+  it('Test 24: _formatPrediction with savings data contains Ada ruang ~ savings line', () => {
+    const output = _formatPrediction({
+      sufficient: true,
+      monthsUsed: 3,
+      categories: { makan: 450000 },
+      classifications: { makan: 'variabel' },
+      savings: { category: 'makan', min: 280000, avg: 450000, headroom: 170000 }
+    });
+    assert.ok(output.includes('Ada ruang ~170rb buat dihemat'), `Expected savings line in output, got: ${output}`);
+  });
+
+  it("Test 25: _formatPrediction with kurang data category shows 'kurang data' without tetap/variabel label", () => {
+    const output = _formatPrediction({
+      sufficient: true,
+      monthsUsed: 2,
+      categories: { makan: 450000, tagihan: 'kurang data' },
+      classifications: { makan: 'variabel' },
+      savings: null
+    });
+    assert.ok(output.includes('kurang data'), `Expected 'kurang data' in output, got: ${output}`);
+    // tagihan should not be followed by tetap or variabel
+    assert.ok(!output.match(/tagihan.*tetap/), `tagihan should not have tetap label in output: ${output}`);
+    assert.ok(!output.match(/tagihan.*variabel/), `tagihan should not have variabel label in output: ${output}`);
   });
 });

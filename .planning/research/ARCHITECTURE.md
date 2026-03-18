@@ -1,423 +1,465 @@
 # Architecture Research
 
-**Domain:** Node.js Telegram bot with Claude AI LLM integration (finance assistant)
-**Researched:** 2026-03-17
-**Confidence:** MEDIUM (training data, no live docs available — well-understood domain)
+**Domain:** Node.js Telegram bot with Claude AI — v1.1 Behavioral Intelligence milestone
+**Researched:** 2026-03-18
+**Confidence:** HIGH (based on direct code inspection of the existing codebase)
 
-## Standard Architecture
+---
 
-### System Overview
+## Context: What Already Exists
+
+This is a subsequent milestone research update. The v1.0 architecture is fully built and verified. The existing module boundaries are:
+
+| Module | Role | Key exports |
+|--------|------|-------------|
+| `index.js` | Bot entry, command routing, cron | `dedupCheck`, `formatAmount` |
+| `claude.js` | Anthropic SDK calls, tool_use for intent/expense parsing | `processMessage(userId, text)` |
+| `storage.js` | Per-user JSON read/write with mutex | `readExpenses`, `appendExpense`, `popExpense`, `readMeta`, `writeMeta` |
+| `prompts.js` | System prompt + tool schemas as named exports | `SYSTEM_PROMPT`, `EXPENSE_TOOL`, `REKAP_TOOL` |
+| `summary.js` | Multi-month aggregation + Claude narrative | `buildMonthlySummary`, `buildWeeklySummary` |
+| `budget.js` | Threshold detection + progress formatting | `checkBudgetAlert`, `formatBudgetProgress` |
+
+**Actual storage schema** (from code inspection):
+
+`data/{userId}.json` — flat array of expense objects:
+```json
+[
+  { "amount": 35000, "category": "makan", "description": "makan siang", "timestamp": "2026-03-17T05:30:00.000Z" }
+]
+```
+
+`data/{userId}_meta.json` — settings/metadata:
+```json
+{ "budget": 500000, "budgets": { "makan": 200000, "transport": 100000 } }
+```
+
+The timestamp field on every expense is an ISO 8601 string. This is the key data source for `/prediksi`.
+
+---
+
+## System Overview: After v1.1
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                       External Services                           │
 │  ┌──────────────────────┐    ┌──────────────────────────────┐    │
 │  │   Telegram Servers    │    │   Anthropic Claude API        │    │
-│  │  (Bot API / polling)  │    │  (claude-3-5-haiku / sonnet)  │    │
+│  │  (Bot API / polling)  │    │  (claude-haiku-4-5)           │    │
 │  └──────────┬───────────┘    └────────────────┬─────────────┘    │
-└─────────────┼───────────────────────────────── ┼────────────────┘
-              │ incoming messages                 │ completions
-              ▼                                   ▼
+└─────────────┼──────────────────────────────────┼─────────────────┘
+              │                                  │
+              ▼                                  │
 ┌──────────────────────────────────────────────────────────────────┐
-│                       index.js — Entry Point                      │
-│  - Bot instance setup (node-telegram-bot-api)                     │
-│  - Event handlers (on 'message', on 'polling_error')              │
-│  - Command routing (/start, /rekap, /budget, /hapus, /help)       │
-│  - Cron job setup (node-cron, Sunday weekly summary)              │
-└───────┬──────────────────┬───────────────────────────────────────┘
-        │ calls            │ calls
-        ▼                  ▼
-┌──────────────┐   ┌───────────────────────────────────────────────┐
-│  storage.js  │   │                 claude.js                      │
-│              │   │  - parseExpense(text, userId)                  │
-│  - load(uid) │◄──│  - generateSummary(expenses, budget, userId)   │
-│  - save(uid) │   │  - buildMessages(history, newMessage)          │
-│              │   │  - callAnthropic(messages, system)             │
-│  data/       │   └───────────────────────────────────────────────┘
-│  {uid}.json  │             │ imports
-│              │             ▼
-└──────────────┘   ┌───────────────────────────────────────────────┐
-        ▲          │                 prompts.js                     │
-        │          │  - SYSTEM_PROMPT (finance scope, personality)  │
-        │          │  - PARSE_EXPENSE_PROMPT (structured output)    │
-        │          │  - SUMMARY_PROMPT (weekly/monthly recap)       │
-        └──────────│  - BUDGET_WARNING_PROMPT                       │
-                   └───────────────────────────────────────────────┘
+│                    index.js — Entry & Routing                     │
+│  /start /help /rekap /hapus /budget  ← static command guards     │
+│  /prediksi  ← NEW static guard (no Claude NLP needed here)       │
+│  free text  ← passes to processMessage() in claude.js            │
+└───────┬─────────────────┬───────────────────────────────────────┘
+        │                 │
+        ▼                 ▼
+┌──────────────┐   ┌─────────────────────────────────────────────┐
+│  storage.js  │   │              claude.js                       │
+│              │   │  processMessage(userId, text)                │
+│  readExpenses│◄──│  — existing tool_use for expense/intent      │
+│  appendExpense    │                                             │
+│  popExpense  │   └─────────────────────────────────────────────┘
+│  readMeta    │
+│  writeMeta   │   ┌─────────────────────────────────────────────┐
+└──────┬───────┘   │              summary.js                      │
+       │           │  buildMonthlySummary / buildWeeklySummary    │
+       │           │  — Claude text call for narrative insight     │
+       │           └─────────────────────────────────────────────┘
+       │
+       │           ┌─────────────────────────────────────────────┐
+       └──────────►│          predict.js  (NEW)                   │
+                   │  buildPrediction(userId, clientOverride)     │
+                   │  — reads ALL historical expenses             │
+                   │  — computes per-category stats               │
+                   │  — classifies fixed/variable (Claude)        │
+                   │  — returns formatted prediction string       │
+                   └─────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│              prompts.js  (MODIFIED)                               │
+│  + PREDICT_TOOL — tool schema for fixed/variable classification   │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-### Component Responsibilities
+---
 
-| Component | Responsibility | What it knows about |
-|-----------|----------------|---------------------|
-| `index.js` | Bot lifecycle, routing, cron | Telegram API, command names, user IDs |
-| `claude.js` | All Claude API calls, response shaping | Anthropic SDK, prompts.js, storage.js (read-only) |
-| `storage.js` | Read/write per-user JSON data | File system, data/ directory, JSON schema |
-| `prompts.js` | All prompt strings, no logic | Nothing — pure data/strings |
+## New Component: predict.js
 
-**Critical boundary:** `claude.js` never writes to storage. `index.js` calls `claude.js` for a result, then calls `storage.js` to persist it. This keeps the AI layer stateless.
+### Responsibility
 
-## Recommended Project Structure
+`predict.js` owns everything needed to answer: "Based on what you've spent so far, what will next month look like?"
 
-```
-mixxy/
-├── index.js              # Entry point, bot setup, command routing, cron
-├── claude.js             # All Claude API calls
-├── storage.js            # JSON file read/write per user
-├── prompts.js            # All prompt strings as named exports
-├── package.json
-├── .env                  # TELEGRAM_TOKEN, ANTHROPIC_API_KEY
-├── .env.example          # Committed template
-└── data/                 # Gitignored, one JSON per user
-    ├── 123456789.json
-    └── 987654321.json
-```
+It does NOT:
+- Route commands (that stays in `index.js`)
+- Write to storage (read-only consumer of `storage.js`)
+- Know about Telegram (returns a plain string)
 
-### Structure Rationale
+It DOES:
+- Aggregate historical expenses by category across calendar months
+- Compute per-category projected spend for next month
+- Call Claude to classify each category as fixed or variable
+- Build a savings target suggestion from variable category variance
+- Return a formatted Bahasa Indonesia string ready to send
 
-- **Flat 4-file layout:** Matches project constraint; avoids over-engineering a bot with ~500 lines total
-- **`data/` directory:** Runtime-created, gitignored — never commit user data
-- **`prompts.js` as pure strings:** Allows editing prompts without touching business logic; makes prompt iteration fast
-- **`claude.js` as the only Anthropic-aware file:** If Anthropic SDK changes or model is swapped, one file changes
+### Module signature
 
-## Architectural Patterns
-
-### Pattern 1: Command Router in index.js
-
-**What:** A single `bot.on('message', handler)` that inspects `msg.text` and dispatches to command-specific functions or the default expense parser.
-
-**When to use:** Always — this is the standard pattern for `node-telegram-bot-api`.
-
-**Trade-offs:** Simple and readable for <10 commands; would need to extract to a router module at 20+ commands.
-
-**Example:**
 ```javascript
-bot.on('message', async (msg) => {
-  const text = msg.text || '';
-  const userId = String(msg.from.id);
-  const chatId = msg.chat.id;
+// predict.js
+async function buildPrediction(userId, clientOverride) { ... }
 
-  if (text.startsWith('/start')) return handleStart(bot, chatId, userId);
-  if (text.startsWith('/rekap')) return handleRekap(bot, chatId, userId);
-  if (text.startsWith('/budget')) return handleBudget(bot, chatId, userId, text);
-  if (text.startsWith('/hapus')) return handleHapus(bot, chatId, userId);
-  if (text.startsWith('/help')) return handleHelp(bot, chatId);
-
-  // Default: treat as expense input
-  return handleExpenseInput(bot, chatId, userId, text);
-});
+module.exports = { buildPrediction };
 ```
 
-### Pattern 2: Structured Output via Claude Tool Use (Function Calling)
+Mirrors `summary.js` structure: takes `userId`, returns a `string`. Accepts `clientOverride` for testability.
 
-**What:** Use Claude's tool_use feature to force structured JSON output for expense parsing, rather than parsing free-text Claude responses with regex.
+---
 
-**When to use:** Expense parsing — any time you need a guaranteed schema from Claude.
+## Data Flow: /prediksi Command
 
-**Trade-offs:** More reliable than asking Claude to "respond in JSON"; slightly more verbose API call setup. Preferred over raw JSON mode for Anthropic's API.
+```
+User types: "/prediksi"
+    |
+    v
+index.js: static command guard matches /prediksi
+    |
+    v
+predict.js: buildPrediction(userId)
+    |
+    v
+storage.js: readExpenses(userId)  --> full expense array (all time)
+    |
+    v
+predict.js: groupByMonth(expenses)
+  -- produces: { "2026-02": { makan: 450000, transport: 120000, ... }, "2026-01": { ... } }
+    |
+    v
+predict.js: computePerCategoryProjection(monthlyBreakdowns)
+  -- for each category: compute weighted average or last-N-months average
+  -- also compute variance for variable category detection
+    |
+    v
+predict.js: classifyCategories(categoryNames, categoryStats) via Claude tool_use
+  -- Claude receives: list of categories + their avg/variance
+  -- returns: { makan: "variable", kost: "fixed", transport: "variable", ... }
+    |
+    v
+predict.js: computeSavingsTarget(variableCategories, varianceData)
+  -- sum of discretionary (variable) categories
+  -- suggest 10-15% reduction where variance is high
+    |
+    v
+predict.js: formatPredictionMessage(projections, classifications, savingsTarget)
+  -- builds the Bahasa Indonesia reply string
+    |
+    v
+index.js: bot.sendMessage(chatId, predictionText)
+    |
+    v
+User sees formatted prediction
+```
 
-**Example:**
+---
+
+## Claude's Role in predict.js: Fixed/Variable Classification
+
+**Decision: Claude does the fixed/variable classification via tool_use.**
+
+Rationale:
+- "kost" is semantically always fixed; "jajan" is semantically always variable — this is category-level knowledge that requires understanding Indonesian context
+- A hardcoded map (`fixed = ['kost', 'tagihan']`, `variable = [...]`) would be brittle and miss edge cases
+- Claude already handles Bahasa Indonesia categories in `prompts.js` — extending that knowledge to classification is natural
+- tool_use guarantees a structured `{ category: "fixed"|"variable" }` response without regex parsing
+
+**Claude is NOT used for:**
+- Number crunching (computing averages, variance — pure JS)
+- Data retrieval (reading expenses — `storage.js`)
+- Formatting the final message (can be hardcoded template strings)
+
+The Claude call is a single focused classification call, not a narrative generation call. This keeps token usage low and the output deterministic.
+
+### PREDICT_CLASSIFY_TOOL (to add to prompts.js)
+
 ```javascript
-// In claude.js
-const tools = [{
-  name: 'record_expense',
-  description: 'Record a parsed expense from user message',
+const PREDICT_CLASSIFY_TOOL = {
+  name: 'classify_categories',
+  description: 'Classify each spending category as fixed or variable for the purpose of spending prediction.',
   input_schema: {
     type: 'object',
     properties: {
-      amount: { type: 'number', description: 'Amount in IDR (full number, e.g. 35000 not 35rb)' },
-      category: { type: 'string', enum: ['food', 'transport', 'entertainment', 'bills', 'shopping', 'health', 'other'] },
-      description: { type: 'string', description: 'Short description in Bahasa Indonesia' },
-      is_expense: { type: 'boolean', description: 'False if message is not an expense report' }
+      classifications: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            category: { type: 'string' },
+            type: { type: 'string', enum: ['fixed', 'variable'] }
+          },
+          required: ['category', 'type']
+        }
+      }
     },
-    required: ['amount', 'category', 'description', 'is_expense']
+    required: ['classifications']
   }
-}];
-
-const response = await anthropic.messages.create({
-  model: 'claude-3-5-haiku-20241022',
-  max_tokens: 256,
-  tools,
-  tool_choice: { type: 'auto' },
-  system: PARSE_EXPENSE_PROMPT,
-  messages: [{ role: 'user', content: text }]
-});
-
-// Extract tool result
-const toolUse = response.content.find(b => b.type === 'tool_use');
-if (toolUse) return toolUse.input; // Guaranteed schema
+};
 ```
 
-**Confidence:** HIGH — tool_use / function calling is the documented Anthropic approach for structured output. The `input_schema` follows JSON Schema format.
+---
 
-### Pattern 3: Stateless Claude Layer with Stateful Storage
+## Modified Component: index.js
 
-**What:** `claude.js` receives all needed data as function arguments. It never reads from the file system directly. `index.js` loads user data via `storage.js`, passes relevant slice to `claude.js`, and writes results back via `storage.js`.
+A single new command guard must be added before the Claude NLP fallthrough:
 
-**When to use:** Always — keeps the AI layer pure and testable.
-
-**Trade-offs:** Slightly more wiring in `index.js`; pays off in testability and clear ownership.
-
-**Example flow:**
 ```javascript
-// In index.js handleExpenseInput()
-const userData = await storage.load(userId);
-const result = await claude.parseExpense(text, userData.recentContext);
-if (result.is_expense) {
-  userData.expenses.push({ ...result, date: new Date().toISOString() });
-  await storage.save(userId, userData);
-  bot.sendMessage(chatId, formatExpenseConfirmation(result, userData));
+if (text === '/prediksi' || text.startsWith('/prediksi@')) {
+  // Guard: require >= 30 days of data
+  const prediction = await buildPrediction(userId);
+  await bot.sendMessage(chatId, prediction);
+  return;
 }
 ```
 
-### Pattern 4: node-cron for Weekly Sunday Summary
+Also requires:
+- `require('./predict')` import added at top
+- `/prediksi` added to the `HELP_MESSAGE` constant
 
-**What:** Use `node-cron` (or `node-schedule`) to fire a job at a specific time on Sundays. The job iterates all JSON files in `data/`, generates a summary per user, and sends it via bot.
+The 30-day minimum history guard lives inside `predict.js`, not `index.js`. If insufficient data, `buildPrediction` returns a user-facing error string in Bahasa Indonesia — `index.js` just sends whatever string comes back.
 
-**When to use:** Weekly auto-summary requirement.
+---
 
-**Trade-offs:** Works fine for low user counts (< 1000); at scale, firing 1000 Claude calls simultaneously would hit rate limits — needs a queue at that point.
+## Modified Component: prompts.js
 
-**Confidence:** MEDIUM — `node-cron` is the standard lightweight cron for Node.js, well-maintained as of 2025.
+Add `PREDICT_CLASSIFY_TOOL` export (see schema above).
+
+No changes to `SYSTEM_PROMPT` — the prediction command is handled outside the Claude NLP path.
+
+---
+
+## Component Responsibilities (Complete Picture)
+
+| Component | Responsibility | Communicates With |
+|-----------|----------------|-------------------|
+| `index.js` | Bot lifecycle, command routing, cron | storage.js, claude.js, summary.js, budget.js, predict.js |
+| `claude.js` | Expense parsing + intent detection via tool_use | prompts.js, Anthropic API |
+| `storage.js` | Per-user JSON I/O with mutex/atomic writes | File system |
+| `prompts.js` | All prompt strings and tool schemas (pure data) | Nothing |
+| `summary.js` | Historical aggregation + Claude narrative insight | storage.js, Anthropic API |
+| `budget.js` | Threshold detection + budget progress formatting | storage.js |
+| `predict.js` (NEW) | Future spend projection + fixed/variable classification | storage.js, prompts.js, Anthropic API |
+
+**Critical boundary maintained:** `predict.js` never writes to storage. It reads expenses and returns a string. Same contract as `summary.js`.
+
+---
+
+## Architectural Patterns
+
+### Pattern 1: Read-Only Compute Modules (summary.js and predict.js)
+
+**What:** Modules that read from storage, perform computation, optionally call Claude, and return a formatted string. They never write to storage, never interact with Telegram directly.
+
+**When to use:** Any feature that computes a view over stored data — summaries, predictions, reports.
+
+**Trade-offs:** Simple contract (string in, string out), easy to test with mock data. The only cost is that index.js must wire them.
+
+**Example (predict.js mirrors summary.js structure):**
+```javascript
+async function buildPrediction(userId, clientOverride) {
+  const expenses = await storage.readExpenses(userId);
+  if (!hasSufficientHistory(expenses)) {
+    return 'Data belum cukup untuk prediksi. Butuh minimal 30 hari riwayat pengeluaran.';
+  }
+  const monthlyBreakdowns = groupByMonth(expenses);
+  const projections = computeProjections(monthlyBreakdowns);
+  const classifications = await classifyWithClaude(projections, clientOverride);
+  const savings = computeSavingsTarget(projections, classifications);
+  return formatPrediction(projections, classifications, savings);
+}
+```
+
+### Pattern 2: Claude tool_use for Structured Classification
+
+**What:** Pass structured data (category names + statistics) to Claude via a tool schema. Receive typed output without parsing.
+
+**When to use:** Any time Claude needs to make a categorical judgment about structured data — classification, labeling, scoring.
+
+**Trade-offs:** Reliable schema enforcement. Slightly more setup than a prompt string. Never breaks on free-text variance.
 
 **Example:**
 ```javascript
-// In index.js — runs at 10:00 AM WIB (UTC+7 = 03:00 UTC) every Sunday
-cron.schedule('0 3 * * 0', async () => {
-  const userIds = await storage.listUsers();
-  for (const userId of userIds) {
-    const userData = await storage.load(userId);
-    const summary = await claude.generateWeeklySummary(userData);
-    await bot.sendMessage(userData.chatId, summary);
-    await delay(1000); // Rate limit buffer
-  }
+const response = await client.messages.create({
+  model: 'claude-haiku-4-5',
+  max_tokens: 256,
+  tools: [PREDICT_CLASSIFY_TOOL],
+  tool_choice: { type: 'required' },  // force tool use
+  messages: [{
+    role: 'user',
+    content: `Klasifikasikan kategori pengeluaran berikut: ${JSON.stringify(categorySummary)}`
+  }]
 });
+const toolBlock = response.content.find(b => b.type === 'tool_use');
+return toolBlock.input.classifications;
 ```
 
-**Note:** The user's Telegram `chatId` must be stored at first interaction — `chatId` and `userId` are different in Telegram.
+Note `tool_choice: { type: 'required' }` — forces Claude to use the tool rather than optionally using it, ensuring structured output every time.
 
-## Data Flow
+### Pattern 3: Computation Outside Claude
 
-### Request Flow: Expense Input
+**What:** All arithmetic (averages, variance, projections) is done in JavaScript before the Claude call. Claude only receives pre-computed stats and does semantic reasoning on them.
 
-```
-User types: "tadi makan siang 35rb"
-    ↓
-Telegram servers → polling → bot.on('message')
-    ↓
-index.js: identify as non-command text
-    ↓
-storage.js: load data/{userId}.json
-    ↓
-claude.js: parseExpense(text) → Anthropic API (tool_use)
-    ↓
-Anthropic returns: { amount: 35000, category: 'food', description: 'makan siang', is_expense: true }
-    ↓
-index.js: append to userData.expenses[], check budget proximity
-    ↓
-storage.js: save data/{userId}.json
-    ↓
-index.js: format confirmation message (optionally include roast if overspending)
-    ↓
-bot.sendMessage(chatId, confirmationText)
-    ↓
-User sees: "Oke, makan siang 35rb tercatat 🍜"
-```
+**When to use:** Any prediction or aggregation feature. Claude is expensive per token — don't waste tokens on math Claude doesn't need to do.
 
-### Request Flow: /rekap Command
+**Trade-offs:** More JS code to write and test; but the math is deterministic and unit-testable without API calls.
+
+---
+
+## Data Flow: Internal Aggregation Logic in predict.js
 
 ```
-User types: "/rekap"
-    ↓
-index.js routes to handleRekap()
-    ↓
-storage.js: load data/{userId}.json
-    ↓
-index.js: filter expenses for current month
-    ↓
-claude.js: generateSummary(expenses, budget) → Anthropic API (text response)
-    ↓
-Anthropic returns: natural language summary in Bahasa Indonesia
-    ↓
-bot.sendMessage(chatId, summary)
+readExpenses(userId) → flat array of { amount, category, timestamp }
+    |
+    v
+groupByMonth(expenses)
+  → Map<"YYYY-MM", Map<category, totalAmount>>
+    |
+    v
+filterCompleteMonths(monthlyMap)
+  → drop current partial month from projection input
+  → require >= 1 complete month (ideally >= 2 for trend)
+    |
+    v
+computeProjections(completeMonths)
+  → for each category: average across available months
+  → also: stdDev per category (variance signal for savings suggestion)
+    |
+    v
+Claude classifyCategories(categoryStats)
+  → { makan: "variable", kost: "fixed", transport: "variable", ... }
+    |
+    v
+computeSavingsTarget(variableProjections, stdDevByCategory)
+  → identify high-variance variable categories
+  → suggest X% reduction (conservative: 10-15% of variable total)
+    |
+    v
+formatPrediction(projections, classifications, savingsTarget)
+  → Bahasa Indonesia string, same style as buildMonthlySummary output
 ```
 
-### Request Flow: Weekly Cron
+### History Window Decision
 
-```
-node-cron fires at Sunday 03:00 UTC
-    ↓
-storage.js: listUsers() → all user IDs from data/ directory
-    ↓
-For each userId:
-    storage.js: load data/{userId}.json
-    ↓
-    claude.js: generateWeeklySummary(expenses, budget) → Anthropic API
-    ↓
-    bot.sendMessage(userData.chatId, summary)
-    ↓
-    delay(1000ms) // Avoid Telegram rate limits
+Use all available complete months, up to a practical limit (e.g., last 6 months). Beyond 6 months, older data is less predictive of current habits. This is a constant in `predict.js`:
+
+```javascript
+const MAX_HISTORY_MONTHS = 6;
+const MIN_HISTORY_DAYS = 30;
 ```
 
-## JSON Storage Schema
+---
 
-Per-user file: `data/{userId}.json`
-
-```json
-{
-  "userId": "123456789",
-  "chatId": 123456789,
-  "username": "budi_santoso",
-  "firstSeen": "2026-03-01T10:00:00.000Z",
-  "budget": {
-    "monthly": 3000000,
-    "currency": "IDR"
-  },
-  "expenses": [
-    {
-      "id": "uuid-or-timestamp",
-      "amount": 35000,
-      "category": "food",
-      "description": "makan siang",
-      "rawText": "tadi makan siang 35rb",
-      "date": "2026-03-17T05:30:00.000Z"
-    }
-  ],
-  "lastActivity": "2026-03-17T05:30:00.000Z"
-}
-```
-
-**Schema notes:**
-- `chatId` separate from `userId` — required for bot to send proactive messages (cron)
-- `rawText` kept for debugging Claude parsing mistakes
-- `expenses` is an append-only array; `/hapus` pops the last entry
-- No soft deletes needed for MVP — `/hapus` physically removes last entry
-- `budget.monthly` is null/omitted until user sets it via `/budget`
-
-## Build Order (Dependency Graph)
+## Build Order for v1.1
 
 ```
-prompts.js          ← no dependencies, build first
-    ↓
-storage.js          ← no dependencies, build second
-    ↓
-claude.js           ← depends on prompts.js
-    ↓
-index.js            ← depends on claude.js + storage.js, wire last
+prompts.js  ← add PREDICT_CLASSIFY_TOOL export
+    |
+    v
+predict.js  ← new module; depends on storage.js + prompts.js
+    |
+    v
+index.js    ← add /prediksi guard + require('./predict') + update HELP_MESSAGE
 ```
 
 **Rationale:**
-1. `prompts.js` first — pure strings, no imports, needed by claude.js
-2. `storage.js` second — pure file I/O, needed by index.js and indirectly by claude.js test flows
-3. `claude.js` third — needs prompts.js; can be tested in isolation with mock data before index.js exists
-4. `index.js` last — the integration layer; nothing depends on it
+1. `prompts.js` first — `predict.js` imports the classify tool schema from it; no logic change, just a new export
+2. `predict.js` second — can be fully built and tested in isolation using mock expense arrays and a clientOverride for the Claude call; does not require `index.js` changes to test
+3. `index.js` last — a three-line addition (guard + import + help text); integration test can be done manually via Telegram
 
-This order allows each module to be tested independently before wiring them together.
+**No changes needed to:** `claude.js`, `storage.js`, `budget.js`, `summary.js`
+
+---
+
+## Integration Points
+
+### New Module Boundary
+
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| `index.js` → `predict.js` | Direct function call, `await buildPrediction(userId)` | Returns string or error string — index.js always calls bot.sendMessage with the result |
+| `predict.js` → `storage.js` | `readExpenses(userId)` only — read-only | No mutex needed (reads don't need exclusive access) |
+| `predict.js` → `prompts.js` | Import `PREDICT_CLASSIFY_TOOL` constant | Same import pattern as claude.js imports EXPENSE_TOOL |
+| `predict.js` → Anthropic API | Via `@anthropic-ai/sdk` directly, same as summary.js | Module-level `defaultClient = new Anthropic()`, accepts `clientOverride` for tests |
+
+### No Changes to These Boundaries
+
+- `claude.js` ↔ `prompts.js` — unchanged
+- `claude.js` ↔ `index.js` — unchanged, NLP path unaffected
+- `storage.js` ↔ all modules — unchanged, no new storage schema needed
+
+---
+
+## Anti-Patterns
+
+### Anti-Pattern 1: Routing /prediksi Through Claude NLP
+
+**What people do:** Let the free-text handler detect "/prediksi" intent via Claude, add a `predict_intent` tool to `claude.js`.
+
+**Why it's wrong:** `/prediksi` is an explicit command — it always means the same thing. Running it through Claude NLP adds latency and token cost for zero benefit. The existing pattern in `index.js` already handles this correctly (static guards before NLP).
+
+**Do this instead:** Add a static command guard in `index.js` before the `processMessage(userId, text)` call. Mirror how `/rekap` is handled.
+
+### Anti-Pattern 2: Claude Does the Arithmetic
+
+**What people do:** Pass raw expense arrays to Claude and ask it to compute averages and projections.
+
+**Why it's wrong:** Token cost, no determinism guarantee on arithmetic, hard to test. Claude's strength here is semantic category classification, not number crunching.
+
+**Do this instead:** Compute all aggregates (averages, variance, per-category totals) in JavaScript. Pass only the pre-computed summary to Claude for the classification call.
+
+### Anti-Pattern 3: Hardcoded Fixed/Variable Map
+
+**What people do:** `const FIXED_CATEGORIES = ['kost', 'tagihan', 'pulsa']` — a static lookup table.
+
+**Why it's wrong:** Misses context. "tagihan" could be a variable utility bill in one user's context, or a fixed subscription in another. More importantly, it can't adapt as categories evolve. Claude already understands Indonesian spending semantics.
+
+**Do this instead:** Use Claude's `classify_categories` tool_use call with `tool_choice: required`. If the call fails, fall back gracefully (treat all as variable — conservative prediction).
+
+### Anti-Pattern 4: Storing Prediction Results
+
+**What people do:** Persist the prediction output to `_meta.json` and serve cached results.
+
+**Why it's wrong:** Predictions are stale immediately after new expenses are logged. For this user count and data size, recomputing on every `/prediksi` call is fast (< 100ms JS + ~500ms Claude). Caching adds complexity with no real benefit.
+
+**Do this instead:** Compute fresh on every `/prediksi` invocation.
+
+---
 
 ## Scaling Considerations
 
 | Scale | Architecture Adjustments |
 |-------|--------------------------|
-| 1-10 users | Current design is perfect — no changes needed |
-| 10-500 users | Add cron rate limiting (delay between users); consider batching Claude calls |
-| 500-5000 users | JSON files become unwieldy for queries; migrate to SQLite (better-sqlite3) as drop-in replacement |
-| 5000+ users | SQLite → PostgreSQL; add Redis queue for cron jobs; separate bot process from cron worker |
+| 1-100 users | Current design: `predict.js` with synchronous per-user compute on demand. No changes. |
+| 100-1000 users | Add `p-limit` if a cron-based prediction prefetch is ever added. No other changes. |
+| 1000+ users | JSON file reads per `/prediksi` call become the bottleneck. Migrate to SQLite with indexed timestamp queries. `predict.js` interface stays the same — only `storage.js` changes. |
 
-### First Bottleneck
+**First bottleneck for predict.js specifically:** Reading the full expense array for users with years of data. A user with 1000+ entries still loads < 100KB of JSON — negligible. This is not a concern for the current user count.
 
-File system I/O when listing all users for cron. At 500+ JSON files, `fs.readdir()` + reading each file is slow. Fix: maintain an index file `data/index.json` with `{ userId, chatId }` pairs — cron reads index, not every file.
-
-### Second Bottleneck
-
-Anthropic API rate limits during cron (429 errors). Fix: use `p-limit` to cap concurrent Claude calls (e.g., 5 at a time) instead of sequential `delay()`.
-
-## Anti-Patterns
-
-### Anti-Pattern 1: Parsing Claude's Text Response for Expense Data
-
-**What people do:** Ask Claude to "respond with JSON" in the system prompt, then JSON.parse the response string.
-
-**Why it's wrong:** Claude occasionally adds prose around the JSON ("Here is the data: `{...}`"), breaking the parse. Error handling becomes complex and fragile.
-
-**Do this instead:** Use Claude's tool_use / function calling. Anthropic guarantees the `tool_use` block has valid JSON matching the schema. Zero parsing needed.
-
-### Anti-Pattern 2: Storing chatId === userId
-
-**What people do:** Use `msg.from.id` as both the user identifier and the target for `bot.sendMessage()`.
-
-**Why it's wrong:** In group chats, `msg.chat.id` is the group chat ID, not the user ID. For private chats they happen to be equal, but relying on this silently breaks group chat support and makes the cron code wrong.
-
-**Do this instead:** Always store both `userId` (from `msg.from.id`) and `chatId` (from `msg.chat.id`) in the user record at first interaction.
-
-### Anti-Pattern 3: Importing storage.js Inside claude.js
-
-**What people do:** Have `claude.js` call `storage.load(userId)` directly to fetch context.
-
-**Why it's wrong:** Creates circular dependencies (if index.js ever needs to pass data between them) and makes `claude.js` untestable without a real file system.
-
-**Do this instead:** `index.js` loads data from `storage.js`, passes relevant slices as function arguments to `claude.js`. Claude functions are pure input/output.
-
-### Anti-Pattern 4: Single Global Claude Conversation History
-
-**What people do:** Maintain one `messages` array that grows forever, passing full history to every API call.
-
-**Why it's wrong:** Token costs grow linearly; very old "makan siang 35rb" messages have zero value in new requests.
-
-**Do this instead:** For expense parsing, use zero-shot calls (no history — one user message, one response). For summary generation, pass only the structured expense data, not chat history. History is only useful for multi-turn clarification, which this bot doesn't need.
-
-## Integration Points
-
-### External Services
-
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| Telegram Bot API | `node-telegram-bot-api` with polling | Polling is simpler for development/VPS; webhooks require HTTPS endpoint |
-| Anthropic Claude API | `@anthropic-ai/sdk` official Node SDK | Use `claude-3-5-haiku-20241022` for expense parsing (fast, cheap); `claude-3-5-sonnet` optional for summaries |
-
-### Internal Boundaries
-
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| `index.js` ↔ `claude.js` | Direct function calls, async/await | claude.js exports named async functions |
-| `index.js` ↔ `storage.js` | Direct function calls, async/await | storage.js exports `load(userId)` and `save(userId, data)` |
-| `claude.js` ↔ `prompts.js` | ES module imports, string constants | prompts.js is imported at top; no runtime dependency |
-| `index.js` ↔ Telegram | Event emitter (`bot.on`) + `bot.sendMessage()` | node-telegram-bot-api wraps the Bot API |
-| `claude.js` ↔ Anthropic | `@anthropic-ai/sdk` `messages.create()` | All Anthropic calls go through this one module |
-
-## Model Selection Guidance
-
-| Use Case | Recommended Model | Rationale |
-|----------|-------------------|-----------|
-| Expense parsing (per-message) | `claude-3-5-haiku-20241022` | Fast (< 1s), cheap, handles structured Indonesian slang well |
-| Weekly summary (once/week/user) | `claude-3-5-haiku-20241022` | Adequate for summary generation; upgrade to Sonnet if quality disappoints |
-| `/rekap` on-demand summary | `claude-3-5-haiku-20241022` | Same reasoning as weekly |
-
-**Confidence:** MEDIUM — Haiku was the fast/cheap tier as of 2025. Model names may have changed; verify against Anthropic's current model list before building.
-
-## Environment Configuration
-
-```
-TELEGRAM_TOKEN=your_bot_token_here
-ANTHROPIC_API_KEY=sk-ant-...
-DATA_DIR=./data              # Optional, defaults to ./data
-CRON_TIMEZONE=Asia/Jakarta   # Optional, for correct Sunday timing
-PORT=3000                    # Only needed if using webhooks (not polling)
-```
-
-**Note on timezone:** Indonesian users are at UTC+7 (WIB). A Sunday summary sent at 10:00 WIB = 03:00 UTC. Use `Asia/Jakarta` in node-cron's `scheduled: true` option, or calculate UTC offset manually.
+---
 
 ## Sources
 
-- Training data knowledge of `node-telegram-bot-api` (well-established package, stable API)
-- Training data knowledge of Anthropic Claude API tool_use / function calling (documented pattern as of 2025)
-- Training data knowledge of `node-cron` scheduling patterns
-- PROJECT.md context for Mixxy project constraints
+- Direct code inspection: `index.js`, `claude.js`, `storage.js`, `prompts.js`, `summary.js`, `budget.js` (2026-03-18)
+- `.planning/PROJECT.md` — v1.1 milestone requirements
+- Existing `ARCHITECTURE.md` v1.0 — base architecture patterns preserved
+- Anthropic tool_use documentation pattern (HIGH confidence — same pattern used in `claude.js` and `summary.js` already)
 
 **Confidence notes:**
-- Component boundaries and 4-file structure: HIGH (derived from project constraints in PROJECT.md)
-- Tool_use for structured output: HIGH (core Anthropic API feature, stable since 2023)
-- Model names/versions: MEDIUM (verify against current Anthropic docs before building)
-- Scaling thresholds: LOW (rough estimates, validate with actual file system benchmarks)
+- Integration points and module boundaries: HIGH (based on code inspection, not assumptions)
+- Claude tool_use for classification: HIGH (already proven in codebase via `log_expense` and `report_intent` tools)
+- Projection algorithm (averaging vs weighted vs trend): MEDIUM (adequate for MVP; actual choice is an implementation detail that doesn't affect architecture)
+- `tool_choice: required` enforcement: HIGH (documented Anthropic API feature, appropriate here where we need guaranteed structured output)
 
 ---
-*Architecture research for: Node.js Telegram finance bot with Claude AI (Mixxy)*
-*Researched: 2026-03-17*
+*Architecture research for: Mixxy v1.1 — /prediksi behavioral intelligence integration*
+*Researched: 2026-03-18*

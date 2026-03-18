@@ -1,24 +1,119 @@
 # Feature Research
 
 **Domain:** Personal finance Telegram bot — Bahasa Indonesia, Indonesian market
-**Researched:** 2026-03-17
-**Confidence:** MEDIUM (web search unavailable; based on training data through Aug 2025 — Indonesian market specifics require validation)
+**Researched:** 2026-03-18 (updated from 2026-03-17)
+**Confidence:** MEDIUM-HIGH (web search used; Indonesian market specifics MEDIUM — validate with users)
 
 ---
 
 ## Research Notes
 
-Web search tools were unavailable during this research session. Findings are drawn from training data on:
-- Cleo AI (UK/US product, heavy Telegram/chat-based finance analogue)
-- Personal finance apps popular in Indonesia: Jenius, Spendee, Money Manager, Finansialku
-- Indonesian digital payment ecosystem: GoPay, OVO, DANA, ShopeePay, LinkAja
-- General chatbot UX patterns for conversational finance
+Updated for v1.1 milestone: Behavioral Intelligence / Spend Prediction. This document extends the
+v1.0 feature research with spend prediction, fixed vs. variable classification, and savings
+recommendations — the `/prediksi` feature cluster.
 
-Confidence per section is noted inline. Indonesian market specifics are MEDIUM confidence and should be validated with real Indonesian users before v2 feature decisions.
+Research sources for this update:
+- Cleo AI (primary analogue for AI finance chatbot with savings/prediction features)
+- YNAB (methodology reference for budgeting intelligence)
+- Mint / NerdWallet / Rocket Money (competitor pattern analysis)
+- Industry research on forecasting minimum viable data requirements
+- Forecasting methodology literature (moving averages, EWMA)
+
+The original v1.0 research below is preserved for complete context.
 
 ---
 
-## Feature Landscape
+## Feature Landscape — v1.1 Additions (Spend Prediction / Behavioral Intelligence)
+
+### Table Stakes for Spend Prediction (Users Expect These)
+
+If the bot presents a `/prediksi` command, these behaviors are assumed to exist. Missing them
+makes the feature feel broken or untrustworthy.
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Next-month total spend estimate | Core premise of any "prediction" feature — users expect a number | MEDIUM | Simple: 3-month rolling average per category, summed; Claude narrates the output |
+| Per-category breakdown in prediction | Budget tracking is already per-category; predictions must match that mental model | MEDIUM | Mirrors `/rekap` structure so users have a consistent frame |
+| Minimum history guard | Predictions with <30 days of data are misleading; the bot must refuse gracefully | LOW | Gate: if user has <30 days logged, decline with a helpful message ("Butuh lebih banyak data dulu...") |
+| Confidence signal | Users need to know if the prediction is based on 3 months or 3 weeks of data | LOW | Simple: show how many months of data were used; don't need a % confidence score |
+| Fixed vs. variable labeling | Rent (kost) and subscriptions are predictable; food varies — users know this intuitively and expect the bot to too | MEDIUM | Claude classifies on the fly from category + variance; no separate ML model needed |
+
+### Differentiators for Spend Prediction
+
+Features that make `/prediksi` feel like a smart friend, not just a calculator.
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Savings headroom suggestion | "Bulan depan kamu mungkin bisa hemat 150rb di jajan" — actionable, not just descriptive | MEDIUM | Requires discretionary spend variance + historical average; Claude computes and narrates |
+| Roast-inflected prediction narrative | Cleo's killer feature is the voice, not the data — predictions delivered in the bot's personality keep users engaged | LOW | Already built: Claude generates narrative; same system prompt applies |
+| Category variance callout | "Pengeluaran transport kamu naik 40% bulan ini — bulan depan kemungkinan sama kalau polanya gak berubah" | MEDIUM | Requires month-over-month comparison by category; depends on 2+ months of data |
+| Spending pattern memory | "Kamu biasanya lebih boros di akhir bulan" — pattern detection across weeks | HIGH | Needs weekly bucketing of historical data; significant data aggregation work; defer to v1.2+ |
+| "What if" scenarios | "Kalau kamu kurangin jajan 20%, kamu bisa hemat Xrb bulan depan" | HIGH | Requires interactive state in conversation; complex UX for Telegram; defer to v2 |
+
+### Anti-Features for Spend Prediction
+
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| ML-powered prediction model | "Real prediction uses ML, not averages" | Training data requirements (1+ year), model maintenance, cost — massively over-engineered for a bot with 1-10 users; simple averages are just as accurate at low sample sizes | 3-month weighted average + Claude narration is indistinguishable to users; ship the simple version |
+| Daily/weekly predictions | "I want to see predicted spend by week" | Weekly prediction from monthly data is false precision; users don't make weekly decisions based on this | Monthly predictions only; weekly is noise |
+| % confidence intervals | "Show me a range like 150k-250k" | Confusing UX for casual users; finance anxiety increases with uncertainty ranges | Simple "kira-kira 200rb" with a caveat; don't show error bars in a chat bot |
+| Prediction history / accuracy tracking | "Was my last prediction correct?" | Requires storing predictions, comparing to actuals, surfacing retrospectives — massive scope expansion | Out of scope for MVP; if users engage heavily, consider a monthly accuracy roundup |
+| Bank-feed-powered prediction | "Auto-sync my BCA/GoPay for better predictions" | Indonesian Open Banking is not standardized; screen-scraping is fragile and violates ToS | Self-reported data only; predictions are only as good as what users log (communicate this honestly) |
+| Savings account integration | "Move money to savings automatically" | Payment/banking API integration requires financial licensing, massive compliance surface | Suggest savings targets as text advice only; no money movement |
+
+---
+
+## Minimum Viable Prediction — What Actually Works
+
+Based on research into Cleo, YNAB, Mint, and forecasting methodology:
+
+### The 30-day minimum is real, but 60-90 days is better
+
+- **30 days:** Enough for a rough estimate; single month may contain one-off events (holiday, travel)
+- **60-90 days:** Smooths out anomalies; 3-month rolling average is the industry-standard MVP approach
+- **1 year+:** Needed for seasonality detection (Lebaran spending spike, year-end bonuses); out of scope for MVP
+
+**Implementation recommendation:** Gate at 30 days but add a caveat ("Ini prediksi awal — makin banyak data yang kamu log, makin akurat prediksinya"). Show how many months of data were used.
+
+### The simplest useful algorithm
+
+```
+predicted_category = average(last_3_months_category_spend)
+```
+
+This is what Cleo, Mint, and Rocket Money effectively do at the chat/summary layer. The ML that Cleo advertises is in their bank-feed categorization (not needed here — Claude handles categorization). For prediction narrative, simple averages work.
+
+**Weight recent months more:** If a user's food spend jumped last month, a pure 3-month average underweights the trend. Weight: month-3: 25%, month-2: 33%, month-1: 42%. This matches EWMA (exponentially weighted moving average) behavior without requiring a math library.
+
+### Fixed vs. variable classification heuristic
+
+| Category | Classification | Rationale |
+|----------|---------------|-----------|
+| Kost / sewa | Fixed | Near-identical each month; predictable |
+| Tagihan (listrik, BPJS) | Fixed | Recurring, low variance |
+| Pulsa / paket data | Fixed | Monthly top-up behavior, predictable |
+| Transport (ojol/grab) | Variable | Highly usage-dependent |
+| Makan / jajan | Variable | Daily discretionary, high variance |
+| Hiburan | Variable | Event-driven spend |
+| Belanja | Variable | Impulse-driven; high variance |
+| Kesehatan | Variable | Unpredictable by nature |
+
+Claude can classify based on category name + coefficient of variation across months. No separate ML needed — Claude understands these categories and can reason about variance from the data passed in the prompt.
+
+### Savings target suggestion
+
+**Formula:** `savings_suggestion = avg_discretionary_spend * variance_buffer_pct`
+
+Where:
+- `discretionary_spend` = sum of variable categories (makan, jajan, hiburan, belanja, transport)
+- `variance_buffer_pct` = the gap between highest and lowest months in last 3 months, expressed as a % of average
+- Suggestion: "spend the average, not the high" — potential savings is `max_month - avg_month` for discretionary
+
+This mirrors what Cleo does conceptually (identifying "frugal months" as savings potential). The math is simple; the value is in Claude's narrative delivery.
+
+---
+
+## Feature Landscape — v1.0 (Preserved)
 
 ### Table Stakes (Users Expect These)
 
@@ -38,8 +133,6 @@ Features users assume exist. Missing these = product feels incomplete or broken.
 
 ### Differentiators (Competitive Advantage)
 
-Features that set the product apart from generic expense trackers.
-
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
 | Bahasa Indonesia NLP (casual register) | No competitor Telegram bot does this natively; users can say "udah bayar kost bulan ini 1.5jt" and it works | MEDIUM | Claude system prompt must handle: slang amounts ("rb", "ribu", "juta", "k", "perak"), common abbreviations, informal syntax |
@@ -52,8 +145,6 @@ Features that set the product apart from generic expense trackers.
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
-Features that seem useful but create problems at MVP stage.
-
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
 | Receipt scanning / OCR | "I want to just photo my receipt" | Requires image processing pipeline, STRUK format varies wildly, adds latency and cost; not essential when voice-style text input is fast | Keep text input; users who want receipt scanning have higher friction tolerance — defer to v2 |
@@ -63,7 +154,6 @@ Features that seem useful but create problems at MVP stage.
 | Export to Excel/CSV | "I want a spreadsheet" | Creates data pipeline maintenance; most users who ask don't actually use exports | Defer; summary text in chat satisfies 90% of use cases |
 | Category editing / custom categories | "I want to add my own categories" | Category management UI is complex; users rarely maintain custom systems | Pre-define an Indonesian-appropriate category list; let Claude infer intelligently |
 | Shared/family expense tracking | "I want to share with my spouse" | Multi-user data model, reconciliation logic, trust/privacy concerns — a separate product | Single-user only for MVP; Telegram groups could be a future approach |
-| Savings goals | "I want to save for X" | Goal tracking requires positive-side data entry; doubles the UX complexity | Out of scope for expense-tracker MVP; add in v2 if users ask |
 | Formal "anda" mode / language toggle | "Some users prefer formal Indonesian" | Splits personality, splits prompt engineering, adds config complexity | Always casual ("kamu"); define this in initial onboarding so users self-select |
 
 ---
@@ -72,20 +162,18 @@ Features that seem useful but create problems at MVP stage.
 
 ### Common Expense Categories (Indonesian Context)
 
-These differ meaningfully from Western defaults like "Groceries", "Dining", "Utilities":
-
-| Category | Indonesian Term(s) | Common Subcases | Notes |
-|----------|-------------------|-----------------|-------|
-| Makanan & Minuman | Makan, minum, jajan, kopi | GoFood, GrabFood, warung, kafe, warteg | Highest frequency; must be top category |
-| Transportasi | Grab, Gojek, ojol, bensin, tol, parkir, KRL, TransJakarta | Ride-hailing dominant in cities | "Ojol" (ojek online) is a distinct mental model |
-| Kost / Sewa | Kost, kontrakan, sewa | Monthly payment, common among young adults | High value, monthly — important for budget context |
-| Belanja | Tokopedia, Shopee, belanja online, pasar, minimarket | Indomaret, Alfamart very common | Split from "groceries" — includes lifestyle shopping |
-| Pulsa & Internet | Pulsa, paket data, wifi | Top-up behavior is frequent, small amounts | "Pulsa" is a distinct mental category; not "utilities" |
-| Tagihan | Listrik, air, BPJS, kartu kredit, cicilan | BPJS (national health insurance) is uniquely Indonesian | Infrequent but high value |
-| Hiburan | Bioskop, Netflix, game, karaoke, nongkrong | Spending on socializing ("nongkrong") is culturally significant | |
-| Kesehatan | Apotik, dokter, obat, BPJS non-covered | Separate from tagihan for non-routine health spend | |
-| Pendidikan | Kursus, buku, les, kampus | High priority for many users | |
-| Lain-lain | Hadiah, sumbangan, tak terduga | Catch-all; Claude should infer before defaulting here | |
+| Category | Indonesian Term(s) | Fixed/Variable | Notes |
+|----------|-------------------|----------------|-------|
+| Makanan & Minuman | Makan, minum, jajan, kopi | Variable | Highest frequency; must be top category |
+| Transportasi | Grab, Gojek, ojol, bensin, tol, parkir, KRL | Variable | "Ojol" (ojek online) is a distinct mental model |
+| Kost / Sewa | Kost, kontrakan, sewa | Fixed | Monthly payment, common among young adults |
+| Belanja | Tokopedia, Shopee, belanja online, pasar, minimarket | Variable | Includes lifestyle shopping |
+| Pulsa & Internet | Pulsa, paket data, wifi | Fixed | Top-up behavior is frequent, predictable |
+| Tagihan | Listrik, air, BPJS, kartu kredit, cicilan | Fixed | Infrequent but high value |
+| Hiburan | Bioskop, Netflix, game, karaoke, nongkrong | Variable | Event-driven |
+| Kesehatan | Apotik, dokter, obat | Variable | Unpredictable |
+| Pendidikan | Kursus, buku, les, kampus | Variable | High priority for many users |
+| Lain-lain | Hadiah, sumbangan, tak terduga | Variable | Catch-all |
 
 ### Indonesian Amount Slang (Must Parse Correctly)
 
@@ -96,43 +184,33 @@ These differ meaningfully from Western defaults like "Groceries", "Dining", "Uti
 | "500 perak" | Rp 500 | "Perak" = rupiah in old/casual slang; rare but exists |
 | "22ribu" | Rp 22.000 | Written-out "ribu" |
 | "dua ratus rb" | Rp 200.000 | Spelled-out number + abbreviation |
-| "gopek" | Rp 500 | Very informal slang; low priority |
-| "ceban" | Rp 10.000 | Street-level slang; low priority but bonus if handled |
-
-### Local Payment Methods (Context Signals, Not Integration)
-
-The bot doesn't need to integrate with these, but users will mention them as context. Claude must not be confused by them:
-
-| Mention | Meaning | What to Extract |
-|---------|---------|-----------------|
-| "bayar pake GoPay" | Paid via GoPay e-wallet | Just extract amount + category; payment method is metadata |
-| "transfer ke OVO" | Sent money via OVO | Could be expense (paying someone) or transfer (neutral) — Claude should ask if unclear |
-| "pake DANA" | Paid via DANA e-wallet | Same as GoPay pattern |
-| "gesek kartu" | Paid with credit card | Extract amount only |
-| "cash" / "tunai" | Cash payment | Payment method metadata only |
-| "Shopee Pay" / "ShopeePay" | Shopee's e-wallet | Same as GoPay pattern |
-
-### Indonesian User Behavior Patterns (MEDIUM confidence — validate with users)
-
-- **WhatsApp-first mental model:** Indonesian users are highly comfortable with chat-based interaction but WhatsApp is primary; Telegram requires justification. The "no app to install" angle (using an existing Telegram account) lowers friction.
-- **Short message culture:** Users expect short, punchy responses. Long paragraphs feel like a form, not a friend.
-- **Screenshot culture:** Indonesians share screenshots of interesting/funny bot responses on Twitter/X, Instagram stories. Roast mode outputs should be screenshot-worthy — this is organic growth.
-- **Young adults (18-30) dominate digital finance apps:** This cohort uses GoPay/OVO daily, is comfortable with AI, and is the likely primary user segment.
-- **Warung economy:** Many small cash purchases at warungs, street food stalls — users need to log these quickly without friction. Text-only, no photo, is actually the right constraint.
-- **Monthly kost payments:** Rent (kost) is often the largest single expense for young Indonesians; the bot must handle "1.5jt buat kost" without ambiguity.
 
 ---
 
 ## Feature Dependencies
 
 ```
+/prediksi (next-month prediction)
+    └──requires──> Expense Storage (3+ months of history preferred, 30 days minimum)
+    └──requires──> Category Totals Per Month (aggregation layer)
+    └──requires──> Fixed/Variable Classification (Claude prompt reasoning)
+    └──enhances──> /rekap (same data, forward-looking view)
+
+Savings Suggestion
+    └──requires──> /prediksi (discretionary spend estimate)
+    └──requires──> Month-over-month variance data (3 months preferred)
+
+Fixed/Variable Classification
+    └──requires──> Historical category spend (≥2 months to compute variance)
+    └──enhances──> /prediksi (makes prediction narrative richer)
+
+Category Variance Callout
+    └──requires──> 2+ months per category
+    └──enhances──> /prediksi narrative
+
 Natural Language Input
     └──requires──> Claude NLP Integration
                        └──requires──> Indonesian Amount Slang Parser (in Claude prompt)
-
-Expense Summary
-    └──requires──> Expense Storage
-                       └──requires──> Natural Language Input (to have data)
 
 Budget Warning
     └──requires──> Budget Setting
@@ -141,59 +219,45 @@ Budget Warning
 Weekly Auto-Digest
     └──requires──> Expense Storage (enough history)
     └──requires──> Cron/Scheduler
-
-Roast Mode
-    └──enhances──> Natural Language Input (Claude decides on response)
-    └──requires──> Claude NLP Integration (same call, no separate system)
-
-Delete Last Entry
-    └──requires──> Expense Storage (needs ordered log)
 ```
 
 ### Dependency Notes
 
-- **Natural Language Input requires Claude NLP:** All parsing goes through Claude — there's no separate NLP pipeline to build. This is a strength (simpler architecture) and a risk (Claude API cost, latency).
-- **Budget Warning requires both Budget Setting and Storage:** Can't warn without a target and without knowing current spend. Both must ship together.
-- **Weekly Auto-Digest requires a scheduler:** This is the only async/background feature; needs a cron job separate from the Telegram webhook handler. Small but distinct infrastructure concern.
-- **Roast Mode has no dependency overhead:** It's a Claude prompt behavior, not a separate system. Ships "for free" with the NLP integration if the system prompt is designed correctly.
+- **/prediksi requires aggregated monthly totals per category:** The storage layer must support summing expenses by category and by month. This is an aggregation operation on the existing JSON storage, not a schema change.
+- **Savings suggestion is downstream of prediction:** Can't suggest savings without the predicted discretionary baseline. They ship together or prediction ships first.
+- **Fixed/variable classification requires 2+ months:** With only 1 month of data, there's no variance to compute. Claude can infer from category name alone (kost = fixed) but variance-based classification needs history.
+- **All v1.1 features share the same data dependency:** The blocker is user history, not code complexity. If a user has logged data for 30+ days, all three features become available simultaneously.
 
 ---
 
 ## MVP Definition
 
-### Launch With (v1)
+### v1.1 Launch With
 
-Minimum viable to test "casual expense logging in Bahasa Indonesia works."
+Minimum viable to ship behavioral intelligence that's actually useful.
 
-- [ ] Natural language expense input with Indonesian slang amount parsing — core hypothesis to validate
-- [ ] Auto-categorization with Indonesian-appropriate categories — without this, users must re-categorize everything
-- [ ] `/rekap` for current month summary — minimum reporting to see if the product is useful
-- [ ] `/hapus` to delete last entry — trust safety net; without this, mis-logs accumulate and users abandon
-- [ ] `/budget` to set monthly budget with warnings — gives users a reason to keep logging (goal-tracking)
-- [ ] `/start` onboarding with example inputs in Bahasa Indonesia — without this, users don't know how to talk to the bot
-- [ ] `/help` command — discovery; users forget what's available
-- [ ] Roast mode (always-on, Claude-decided) — this IS the personality; without it, the bot is just a spreadsheet in chat
-- [ ] Weekly auto-digest every Sunday — the one proactive touch; validates whether users find value in summaries
+- [ ] `/prediksi` command with 30-day history guard — without the guard, misleading predictions erode trust
+- [ ] Per-category spend estimate (3-month weighted average or all available months if <3) — per-category mirrors /rekap and is the mental model users already have
+- [ ] Fixed vs. variable labeling in prediction output — makes the prediction scannable and actionable ("fixed costs gak akan turun, yang bisa dihemat adalah...")
+- [ ] Savings headroom suggestion — the "so what?" answer; without it, prediction is just a number with no action
+- [ ] Claude-narrated output in bot personality — same voice as the rest of the bot; data without narrative is a spreadsheet
 
-### Add After Validation (v1.x)
+### Add After Validation (v1.2)
 
-Add once core logging loop is working and users are retained.
+Add once prediction is shipping and users are engaging with it.
 
-- [ ] Period filtering in rekap ("rekap minggu ini", "bulan lalu") — needed when users have history; not urgent day one
-- [ ] Category-specific summaries ("berapa yang aku habiskan buat makan?") — becomes valuable after 2-4 weeks of data
-- [ ] Spending trend comparisons (week-over-week, month-over-month) — requires sufficient history to be meaningful
-- [ ] Edit an entry (not just delete last) — once users have history they care about, correction UX matters more
+- [ ] Category variance callout ("transport kamu naik 40% bulan ini") — requires 2+ months; adds depth to prediction
+- [ ] Prediction accuracy retrospective ("bulan lalu gue prediksi 800rb, ternyata kamu habis 920rb") — needs prediction storage; validate user appetite first
+- [ ] Intra-month warning ("udah hari ke-15 dan kamu udah 60% dari prediksi bulan ini") — proactive mid-month nudge
 
 ### Future Consideration (v2+)
 
-Defer until product-market fit is established.
+Defer until product-market fit is established with v1.1.
 
-- [ ] Receipt OCR — validate that text input friction is real before adding image complexity
-- [ ] Data export (CSV/JSON) — validate that users accumulate enough data to want export
-- [ ] Savings goals — separate product surface; validate that expense tracking alone retains users first
-- [ ] Shared/group expenses — requires rethinking data model; validate single-user first
-- [ ] Bank/e-wallet sync (GoPay, OVO) — depends on Indonesian Open Banking maturation; not viable in 2025-2026 without screen scraping
-- [ ] Web dashboard with charts — only if users explicitly request it; breaks Telegram-only simplicity
+- [ ] Weekly spending pattern detection ("kamu biasanya boros di weekend") — needs weekly bucketing + multi-month history; significant aggregation work
+- [ ] "What if" scenario modeling — requires interactive Telegram conversation state; complex UX
+- [ ] Seasonality detection (Lebaran, year-end) — needs 12+ months of data; not viable until significant user tenure
+- [ ] ML-powered prediction — only justified if simple averages demonstrably underperform; premature optimization for current scale
 
 ---
 
@@ -201,54 +265,45 @@ Defer until product-market fit is established.
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Natural language expense input | HIGH | MEDIUM | P1 |
-| Indonesian slang amount parsing | HIGH | LOW (Claude prompt) | P1 |
-| Auto-categorization (Indonesian categories) | HIGH | LOW (Claude prompt) | P1 |
-| `/rekap` summary | HIGH | LOW | P1 |
-| `/hapus` delete last | HIGH | LOW | P1 |
-| `/budget` + warnings | MEDIUM | LOW | P1 |
-| `/start` onboarding | HIGH | LOW | P1 |
-| `/help` | MEDIUM | LOW | P1 |
-| Roast mode | MEDIUM | LOW (Claude prompt) | P1 |
-| Weekly auto-digest | MEDIUM | MEDIUM (scheduler) | P1 |
-| Period filtering in rekap | MEDIUM | LOW | P2 |
-| Category-specific queries | MEDIUM | LOW | P2 |
-| Spending trend comparisons | MEDIUM | MEDIUM | P2 |
-| Edit entry (not just last) | LOW | MEDIUM | P2 |
-| Receipt OCR | LOW | HIGH | P3 |
-| Data export | LOW | MEDIUM | P3 |
-| Savings goals | LOW | HIGH | P3 |
-| Bank/e-wallet sync | LOW | HIGH | P3 |
-| Web dashboard | LOW | HIGH | P3 |
+| `/prediksi` — next-month estimate by category | HIGH | MEDIUM | P1 |
+| Fixed vs. variable labeling | HIGH | LOW (Claude prompt) | P1 |
+| Savings headroom suggestion | HIGH | MEDIUM | P1 |
+| History guard (30-day minimum) | HIGH | LOW | P1 |
+| Claude narrative delivery | HIGH | LOW (same system) | P1 |
+| Category variance callout | MEDIUM | MEDIUM | P2 |
+| Prediction accuracy retrospective | MEDIUM | MEDIUM | P2 |
+| Intra-month prediction warning | MEDIUM | MEDIUM | P2 |
+| Weekly spending patterns | LOW | HIGH | P3 |
+| What-if scenarios | LOW | HIGH | P3 |
+| Seasonality detection | LOW | HIGH | P3 |
 
 ---
 
 ## Competitor Feature Analysis
 
-| Feature | Cleo AI (UK/US) | Jenius (Indonesian bank app) | Spendee / Money Manager | Mixxy Approach |
-|---------|-----------------|------------------------------|-------------------------|----------------|
-| Expense input | Bank sync (automatic) | Bank transaction auto-import | Manual entry + receipt scan | Natural language text in Telegram — no app needed |
-| Language | English only | Bahasa Indonesia (formal) | English / multi-language | Casual Bahasa Indonesia — first-class |
-| Personality | Roast mode, funny, Gen Z tone | Professional, formal | Neutral/functional | Cleo-style roast adapted for Indonesian cultural humor |
-| Categorization | AI + bank merchant data | Bank-side category mapping | Manual + AI suggestion | Claude AI inference from free text |
-| Reporting | Rich charts, web + mobile app | Bank statement view | Charts, CSV export | Text summaries in Telegram — intentionally minimal |
-| Platform | Mobile app (iOS/Android) | Mobile app (bank app) | Mobile app | Telegram only — zero install friction |
-| Budget alerts | Yes | Yes | Yes | Yes — on every expense log |
-| Proactive digest | Weekly email | Bank statement | Push notification | Weekly Telegram message — same channel as use |
-| Indonesian amounts | N/A (GBP/USD) | Handled (IDR native) | IDR option, no slang | "35rb", "1.5jt" — native slang parsing |
-| Local payment context | N/A | GoPay/OVO in bank app | N/A | Claude understands e-wallet mentions as context |
+| Feature | Cleo AI | YNAB | Rocket Money | Mixxy Approach |
+|---------|---------|------|--------------|----------------|
+| Spend prediction | Yes — AI predicts upcoming expenses, warns of overdraft risk | Rolling budget carryover + historical analysis | Shows estimated monthly spend from last 3 months | Per-category estimate via weighted average; Claude narrates |
+| Fixed vs. variable | Implicitly (recurring vs. non-recurring) | Rule-based budget categories | Recurring vs. non-recurring bills | Claude classifies from category + variance; no separate system |
+| Savings suggestion | Yes — analyzes "frugal windows" to suggest transfer amounts | Assigned money model (zero-based budgeting) | Budget vs. actual comparison | Discretionary variance gap as savings target; Claude suggests |
+| Language | English only | English only | English only | Casual Bahasa Indonesia — first-class |
+| Minimum data needed | Bank sync (instant history) | Manual entry from day 1 | Bank sync (instant history) | 30 days minimum; 3 months for reliable prediction |
+| Delivery | Mobile app push notification | Mobile app | Mobile app | Telegram command — same channel as all other interactions |
+| Personality | Roast mode, casual | Neutral, educational | Neutral | Cleo-style roast adapted for Indonesian cultural humor |
 
 ---
 
 ## Sources
 
-- Cleo AI product knowledge: training data through Aug 2025; features described are HIGH confidence for core functionality (expense tracking, roast mode, budget setting, weekly digest) — **verify current feature set at meetcleo.com**
-- Indonesian personal finance market: training data through Aug 2025; MEDIUM confidence — Indonesian e-wallet ecosystem (GoPay, OVO, DANA, ShopeePay, LinkAja) is well-documented; user behavior patterns are MEDIUM confidence and should be validated with Indonesian users
-- Jenius (BTPN digital bank): HIGH confidence for feature set as of 2024; Indonesian-native banking app
-- Indonesian amount slang: HIGH confidence — "rb" (ribu), "jt" (juta) are universally used; street slang like "ceban" / "gopek" is LOW confidence on frequency
-- Indonesian expense categories: MEDIUM confidence — derived from common Indonesian spending patterns; should be validated by surveying target users
+- Cleo AI product research: web search 2026-03-18 — meetcleo.com; features confirmed via multiple review sources (thepennyhoarder.com, moneycrashers.com, theeverygirl.com) — MEDIUM confidence (no direct API docs; feature set from user reviews and official blog)
+- Forecasting methodology: otexts.com/fpp2 (Forecasting: Principles and Practice) — HIGH confidence academic reference for moving average methodology
+- Data requirements for forecasting: anamind.com, oracle.com EPM docs — MEDIUM confidence; "at least 2x the forecast horizon in history" aligns with industry standard
+- Fixed vs. variable expense taxonomy: NerdWallet, Bankrate, Rocket Money (rocketmoney.com) — HIGH confidence; standard personal finance taxonomy
+- Savings suggestion approach: Cleo AI blog (web.meetcleo.com) — MEDIUM confidence; conceptual description, not technical implementation
+- Personal finance app UX expectations 2025: wildnetedge.com, diceus.com — MEDIUM confidence; secondary sources but consistent with primary research
+- Indonesian expense categories and behavior: training data + v1.0 research — MEDIUM confidence; validate with Indonesian users before v2
 
 ---
 
 *Feature research for: Personal finance Telegram bot, Indonesian market (Mixxy)*
-*Researched: 2026-03-17*
+*Updated: 2026-03-18 — v1.1 Behavioral Intelligence / Spend Prediction additions*

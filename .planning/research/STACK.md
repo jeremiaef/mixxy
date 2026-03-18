@@ -1,73 +1,122 @@
 # Stack Research
 
 **Domain:** Telegram bot (Node.js) with Claude AI integration and local JSON storage
-**Researched:** 2026-03-17
-**Confidence:** MEDIUM — all findings are from training data (cutoff Aug 2025). No live npm/web verification was possible in this session. Validate versions before pinning in package.json.
+**Researched:** 2026-03-18 (updated for v1.1 Behavioral Intelligence milestone)
+**Confidence:** HIGH for "no new deps needed" verdict. MEDIUM for simple-statistics version (npm confirmed 7.8.x, exact patch TBD).
+
+---
+
+## v1.1 Stack Assessment: What Changes?
+
+**Short answer: nothing must change. The /prediksi feature can be built with pure Node.js + Claude.**
+
+The existing stack already contains everything needed:
+
+| Capability needed | Already available |
+|-------------------|-------------------|
+| Date arithmetic (filter by month, get N months ago) | Native `Date` + UTC methods — same pattern as `_filterCurrentMonth()` in `summary.js` |
+| Aggregate spend by category per month | Pure JS `Array.reduce` + `Map` — same pattern as `_buildBreakdown()` in `summary.js` |
+| Fixed vs variable classification | Claude Haiku via `claude.js` — structured tool call with category list input |
+| Prediction narrative + savings suggestion | Claude Haiku via `claude.js` — structured text generation with computed data |
+| Rate limiting / mutex for concurrent reads | `async-mutex` already installed |
+
+The codebase already demonstrates the correct pattern: compute aggregates in pure JS, send the result to Claude for interpretation. There is no gap that requires a new dependency.
 
 ---
 
 ## Recommended Stack
 
-### Core Technologies
+### Core Technologies (unchanged from v1.0)
 
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
-| Node.js | 22 LTS | Runtime | v22 is the current LTS line (Oct 2024–Apr 2027). v20 LTS also acceptable. Avoid v18 (reaches EOL Sep 2025). Native `fetch`, `--env-file`, and top-level `await` reduce dependency count. |
-| node-telegram-bot-api | ^0.66.0 | Telegram Bot API client | Mandated by project constraints. Polling mode works zero-config for dev/MVP. Has maintenance concerns (see below) but is stable for basic use. |
-| @anthropic-ai/sdk | ^0.26.x | Claude API client | Official Anthropic SDK for Node.js. Handles auth, retries, streaming, and typed responses. Use `messages.create()` for expense parsing. |
-| dotenv | ^16.x | Env variable loading | Standard env management. Node 22 `--env-file` flag is a built-in alternative for simple cases — skip `dotenv` if targeting Node 22 only. |
+| Node.js | 20 or 22 LTS | Runtime | v22 preferred (active LTS). Native `Date` UTC methods cover all date math needed for prediction. |
+| @anthropic-ai/sdk | ^0.79.0 (installed) | Claude API client | Handles fixed/variable classification and prediction narrative generation as structured tool calls. |
+| node-telegram-bot-api | ^0.67.0 (installed) | Telegram integration | No change needed for /prediksi — same command registration pattern as /rekap and /budget. |
+| async-mutex | ^0.5.0 (installed) | Concurrent write safety | No change — storage.js already uses this correctly. |
 
-### Supporting Libraries
+### Supporting Libraries (unchanged from v1.0)
 
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
-| zod | ^3.x | Schema validation + parse | Use to validate JSON extracted from Claude responses before writing to disk. Claude occasionally returns malformed JSON — Zod catches it. |
-| date-fns | ^3.x | Date arithmetic for summaries | Weekly recap needs "start of week" and "start of month" boundaries. `date-fns` is tree-shakeable and has no side effects. |
-| node-cron | ^3.x | Scheduled Sunday summaries | Pure-Node cron implementation. Use for the Sunday auto-summary feature. Runs in-process; no external scheduler needed for MVP. |
+| write-file-atomic | ^7.0.1 (installed) | Safe JSON writes | No change for /prediksi — read-only access to expense history. |
+| node-cron | ^4.2.1 (installed) | Weekly digest scheduling | No change needed. |
+| dotenv | ^17.3.1 (installed) | Env variable loading | No change. |
 
-### Development Tools
+### New Libraries for v1.1
 
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| nodemon | Fast dev reload on file change | `nodemon index.js` — avoids manual restart during development. |
-| eslint + @eslint/js | Linting | Use flat config (eslint.config.js) — the legacy .eslintrc format is deprecated as of ESLint 9. |
-| prettier | Formatting | Pair with eslint; prevents style drift across the 4-file codebase. |
+**None required.**
+
+The single candidate worth evaluating was `simple-statistics` (v7.8.x, 320K weekly downloads, no dependencies). It provides `linearRegression`, `mean`, `standardDeviation`. However:
+
+- The prediction method best suited to 1–3 months of sparse data is **category-level monthly average with simple growth factor** — not linear regression. Linear regression on 2–3 data points overfits and produces misleading slopes.
+- `mean([a, b, c])` is `(a + b + c) / 3` — no library needed.
+- Standard deviation for "variable" variance detection is 3 lines of pure JS.
+- Adding `simple-statistics` adds a dependency with no functional gain over the patterns already in `summary.js`.
 
 ---
 
 ## Installation
 
 ```bash
-# Core runtime dependencies
-npm install node-telegram-bot-api @anthropic-ai/sdk dotenv zod date-fns node-cron
-
-# Dev dependencies
-npm install -D nodemon eslint prettier
+# No new packages needed for v1.1
+# All required capabilities are covered by the existing stack
 ```
 
 ---
 
-## Project Structure (Prescribed)
+## Architecture of /prediksi (Pure JS + Claude)
 
-The project brief specifies a clean 4-file structure. Expand only when a file exceeds ~200 lines.
+The correct implementation splits computation from interpretation:
 
+**Step 1 — Pure JS: aggregate historical data**
+
+```js
+// Compute per-category monthly totals for the past N months
+// Same UTC date pattern as _filterCurrentMonth() in summary.js
+function getMonthlyTotalsByCategory(expenses, monthsBack = 3) {
+  const buckets = {}; // { 'makan': [35000, 42000, 38000], ... }
+  const now = new Date();
+
+  for (let i = 1; i <= monthsBack; i++) {
+    const target = new Date(Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth() - i,
+      1
+    ));
+    const year = target.getUTCFullYear();
+    const month = target.getUTCMonth();
+
+    const monthExpenses = expenses.filter(e => {
+      const d = new Date(e.timestamp);
+      return d.getUTCFullYear() === year && d.getUTCMonth() === month;
+    });
+
+    const breakdown = _buildBreakdown(monthExpenses); // reuse existing function
+    for (const [cat, { total }] of Object.entries(breakdown)) {
+      if (!buckets[cat]) buckets[cat] = [];
+      buckets[cat].push(total);
+    }
+  }
+
+  // Return average per category
+  return Object.fromEntries(
+    Object.entries(buckets).map(([cat, totals]) => [
+      cat,
+      Math.round(totals.reduce((s, v) => s + v, 0) / totals.length)
+    ])
+  );
+}
 ```
-mixxy/
-├── index.js          # Bot init, command routing, message handler
-├── claude.js         # All Claude API calls: parseExpense(), generateSummary()
-├── storage.js        # Read/write per-user JSON files under data/
-├── prompts.js        # System prompt + prompt builder functions
-├── data/             # One JSON file per Telegram user ID (gitignored)
-│   └── {userId}.json
-├── .env              # TELEGRAM_TOKEN, ANTHROPIC_API_KEY (gitignored)
-├── .env.example      # Committed, blank values
-└── package.json
-```
 
-**Why this structure works:**
-- `claude.js` isolates all AI logic — prompt changes don't touch routing code
-- `storage.js` as a module means swapping JSON→SQLite later touches one file only
-- `prompts.js` separation lets you tune personality without touching business logic
+**Step 2 — Claude: classify fixed/variable + generate prediction narrative**
+
+Send the computed averages as structured data to Claude. Claude returns:
+- Classification of each category as "fixed" or "variable"
+- Predicted next month total per category
+- Savings recommendation based on variable category variance
+
+This is the same `claude.js` tool-call pattern already used for expense parsing. No new API surface.
 
 ---
 
@@ -75,106 +124,55 @@ mixxy/
 
 | Recommended | Alternative | When to Use Alternative |
 |-------------|-------------|-------------------------|
-| node-telegram-bot-api | **grammY** | grammY is more actively maintained, TypeScript-first, and better documented as of 2025. Use grammY if starting fresh with no constraint to node-telegram-bot-api. |
-| node-telegram-bot-api | **Telegraf v4** | Telegraf has a middleware model similar to Express/Koa. Good for complex bots with many commands. Heavier than needed for MVP. |
-| node-telegram-bot-api | **Telegram Bot API direct (node-fetch)** | Only if you want zero dependencies. Not worth the maintenance cost. |
-| zod | **JSON.parse + try/catch** | Acceptable for MVP if you trust Claude output. But zod catches malformed Claude responses early and gives readable error messages. |
-| date-fns | **Luxon** | Luxon is better for timezone-heavy apps. This bot is IDR/Jakarta-focused — add timezone support only when users report issues. |
-| node-cron | **External cron (crontab, GitHub Actions)** | Better for production reliability (in-process cron dies if process crashes). For MVP with one user, in-process is fine. |
+| Pure JS mean calculation | `simple-statistics` | Use simple-statistics only if adding more complex stats (percentiles, correlation). Not needed for monthly average prediction. |
+| Claude for fixed/variable classification | Rule-based category list | A hardcoded map `{ kost: 'fixed', tagihan: 'fixed', jajan: 'variable', ... }` works but cannot adapt to new categories or user-specific patterns. Claude handles this in one tool call. |
+| Native `Date` UTC methods | `date-fns` | Use date-fns if timezone-aware date arithmetic becomes complex (e.g., WIB/UTC+7 month boundaries). Not needed — current codebase already uses UTC correctly for all date filtering. |
+| Average of N months | Linear regression | Use regression only with 6+ data points. At 1–3 months, regression overfits and produces confidence-destroying noise. Average is more defensible and explainable. |
 
 ---
 
-## What NOT to Use
+## What NOT to Add
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| **moment.js** | Deprecated by its own maintainers since 2020. Huge bundle, mutable API. | `date-fns` (functional, tree-shakeable) |
-| **request / node-fetch v2** | `request` is deprecated. `node-fetch` v2 is CommonJS-only. | Native `fetch` (Node 18+) or `node-fetch` v3 (ESM) |
-| **Telegraf v3** | Telegraf v3 is incompatible with v4, and v3 is EOL. | Telegraf v4 or grammY |
-| **Synchronous `fs` in message handlers** | `fs.readFileSync` blocks the event loop during bot message handling — other users stall. | Always use `fs.promises` (async read/write) |
-| **Storing raw Claude responses without validation** | Claude will occasionally return invalid JSON or extra prose. Storing it unchecked corrupts user data files. | Parse with Zod before writing; log + reply with error if parse fails |
-| **Top-level API key strings** | Hardcoding `ANTHROPIC_API_KEY` in source triggers secret scanning and is a security risk. | `process.env.ANTHROPIC_API_KEY` via `.env` |
+| `simple-statistics` | Zero functional gain over 3 lines of pure JS for the prediction method needed. Adds a 60KB dependency for `mean()`. | `arr.reduce((s,v) => s+v, 0) / arr.length` |
+| `mathjs` or `ml-regression` | Severe overkill for monthly average + variance. These are full numeric/ML libraries. | Pure JS arithmetic |
+| `date-fns` for v1.1 | Not needed — existing UTC Date pattern in summary.js already handles month boundary math correctly. | Native `Date` with `getUTCFullYear()` / `getUTCMonth()` |
+| Persistent prediction cache | Predictions are cheap to recompute on demand (pure JS aggregation + one Claude call). Caching adds state management complexity. | Recompute on every `/prediksi` call |
+| A separate `prediction.js` module | Premature if /prediksi is the only prediction surface. Keep in `summary.js` or a co-located `predictions.js` only if it exceeds ~80 lines. | Add `buildPrediction()` to `summary.js` initially |
 
 ---
 
-## node-telegram-bot-api: Polling vs Webhooks
+## Minimum History Gate
 
-**Polling is correct for this MVP. Webhooks add operational complexity with no benefit at one-user scale.**
-
-### Polling (recommended for MVP)
+The `/prediksi` feature requires ≥30 days of data to be useful (from PROJECT.md). Implement this as a pure JS check before calling Claude:
 
 ```js
-const bot = new TelegramBot(token, { polling: true });
-```
-
-**Gotchas:**
-- `polling: true` starts immediately on instantiation — ensure your handlers are registered synchronously before anything async
-- If the process crashes and restarts within 30 seconds, Telegram may queue duplicate updates. Use `{ polling: { timeout: 10 } }` to reduce conflict window
-- `node-telegram-bot-api` emits an `polling_error` event — you MUST handle it or unhandled errors will crash Node: `bot.on('polling_error', console.error)`
-- Long polling with `node-telegram-bot-api` uses HTTP long-poll internally (30s timeout per request) — it is not a busy-loop
-
-### Webhooks (defer until production with public URL)
-
-Webhooks require:
-1. A public HTTPS URL with a valid TLS certificate
-2. A web server (Express or similar) to receive POST requests
-3. Calling `bot.setWebHook(url)` on startup
-
-Not worth the setup for MVP. Revisit when deploying to a VPS/cloud provider.
-
----
-
-## Claude API: Expense Parsing Pattern
-
-**Use structured JSON output via the system prompt, not function calling, for simplicity.**
-
-```js
-// claude.js pattern
-async function parseExpense(userMessage) {
-  const response = await anthropic.messages.create({
-    model: 'claude-3-5-haiku-20241022',  // fast + cheap for parsing
-    max_tokens: 256,
-    system: SYSTEM_PROMPT,  // from prompts.js
-    messages: [{ role: 'user', content: userMessage }]
-  });
-
-  const text = response.content[0].text;
-  // Claude returns JSON wrapped in prose sometimes — extract it
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('No JSON in Claude response');
-  return ExpenseSchema.parse(JSON.parse(match[0]));  // Zod validates
+function hasEnoughHistory(expenses) {
+  if (expenses.length === 0) return false;
+  const oldest = new Date(expenses[0].timestamp);
+  const daysSince = (Date.now() - oldest.getTime()) / (1000 * 60 * 60 * 24);
+  return daysSince >= 30;
 }
 ```
 
-**Model choice: `claude-3-5-haiku-20241022`** for expense parsing (fast, cheap, accurate for structured extraction). Use `claude-3-5-sonnet-20241022` for weekly summary generation where richer prose matters.
-
-**Confidence: MEDIUM** — model IDs are correct as of Aug 2025 training data. Anthropic releases new models frequently. Check https://docs.anthropic.com/en/docs/models-overview before pinning model strings.
-
-**Indonesian amount slang handling:** Include examples directly in the system prompt:
-- "35rb" → 35000
-- "22ribu" → 22000
-- "50k" → 50000
-- "1,5jt" → 1500000
-
-Claude handles this reliably with few-shot examples. No custom parser needed.
+No library needed. Return a friendly Bahasa Indonesia message if the gate fails.
 
 ---
 
 ## Stack Patterns by Variant
 
-**If deploying to a VPS (e.g., DigitalOcean, Railway):**
-- Switch to webhooks to reduce outbound polling connections
-- Add PM2 or systemd for process management
-- Add a log file rotation strategy (pino or winston)
+**If data history grows beyond 6 months:**
+- The averaging approach still works — just cap `monthsBack` at 3 for recency bias, or weight recent months more heavily with a plain multiplier array.
+- Still no library needed.
 
-**If user count exceeds ~50 concurrent:**
-- JSON files with `fs.promises` will show contention under concurrent writes
-- Migrate storage.js to SQLite (via `better-sqlite3`) — single file, no server, minimal change to the module interface
-- Keep the same storage.js API; only the implementation changes
+**If savings target suggestion needs percentile analysis (e.g., "your makan spend is in the top 30% of your own history"):**
+- At that point, adding `simple-statistics` for `quantile()` is justified.
+- Install then: `npm install simple-statistics@^7.8.0`
 
-**If adding multi-currency later:**
-- Add a `currency` field to the expense schema from day one (default `"IDR"`)
-- Easier to add a field to an existing JSON structure than to migrate without it
+**If timezone accuracy matters for WIB users (UTC+7 month boundaries):**
+- Install `date-fns-tz` and use `toZonedTime(date, 'Asia/Jakarta')` for month boundary detection.
+- Current UTC approach may attribute a Jan 31 11:59pm WIB expense to February in UTC. Acceptable for MVP; flag for v1.2.
 
 ---
 
@@ -182,36 +180,31 @@ Claude handles this reliably with few-shot examples. No custom parser needed.
 
 | Package | Compatible With | Notes |
 |---------|-----------------|-------|
-| node-telegram-bot-api ^0.66 | Node.js 18, 20, 22 | No native ESM — use CommonJS (`require`) or configure interop |
-| @anthropic-ai/sdk ^0.26 | Node.js 18+ | ESM and CJS both supported |
-| zod ^3.x | Node.js 14+ | No compatibility issues expected |
-| node-cron ^3.x | Node.js 12+ | No compatibility issues expected |
-| date-fns ^3.x | Node.js 14+ | v3 is ESM-first; CJS build included |
-
-**Package type recommendation:** Use `"type": "commonjs"` in package.json. `node-telegram-bot-api` is CJS-only and mixing CJS/ESM in a small 4-file project adds friction with no benefit.
+| @anthropic-ai/sdk ^0.79.0 | Node.js 18+ | CJS and ESM both supported; project uses CJS |
+| async-mutex ^0.5.0 | Node.js 14+ | No issues |
+| write-file-atomic ^7.0.1 | Node.js 14+ | No issues |
 
 ---
 
 ## Sources
 
-- Training data (cutoff Aug 2025) — node-telegram-bot-api, telegraf, grammY ecosystem comparison — **LOW-MEDIUM confidence** (verify against current npm before pinning)
-- Training data — Anthropic SDK API (`messages.create`, model IDs) — **MEDIUM confidence** (model IDs change frequently; verify at https://docs.anthropic.com/en/docs/models-overview)
-- Training data — Node.js LTS schedule — **HIGH confidence** (LTS dates are published years ahead at https://nodejs.org/en/about/previous-releases)
-- Training data — node-telegram-bot-api polling gotchas (`polling_error` event, restart deduplication) — **MEDIUM confidence** (these are documented behaviors, but library version matters)
-- Project constraints from `.planning/PROJECT.md` — **HIGH confidence** (source of truth for this project)
+- `/workspaces/mixxy/package.json` — installed dependency versions — **HIGH confidence**
+- `/workspaces/mixxy/summary.js` — existing pure JS date filtering + aggregation patterns — **HIGH confidence**
+- WebSearch: simple-statistics npm (v7.8.x, 320K weekly downloads, no dependencies) — **MEDIUM confidence** (version verified via multiple sources; exact patch unconfirmed)
+- WebSearch: "Node.js built-in date manipulation no dependency" — 2025 trend toward reducing external deps, native `Date` sufficient for simple month arithmetic — **MEDIUM confidence**
+- WebSearch: LLM classification for fixed/variable expense categories — confirmed pattern (LLM-based category classification works well with clear definitions in prompt) — **MEDIUM confidence**
+- WebSearch: linear regression for spend prediction — confirmed that sparse data (1-3 points) makes regression unreliable; averaging is appropriate — **MEDIUM confidence**
+- PROJECT.md constraint: ≥30 days history requirement for /prediksi — **HIGH confidence**
 
 ---
 
 ## Open Validation Items
 
-Before writing first line of code, verify:
-
-1. `npm info node-telegram-bot-api version` — confirm latest is 0.66.x or newer
-2. `npm info @anthropic-ai/sdk version` — confirm latest version
-3. Check https://docs.anthropic.com/en/docs/models-overview for current claude-3-5-haiku model ID string
-4. Confirm `node --version` in deployment environment is 20+ (avoid v18 EOL)
+1. Confirm `claude-haiku-4-5` is still the model ID in use (see `claude.js` line 14) — it is — no change needed for v1.1.
+2. Decide: add `buildPrediction()` to `summary.js` or create a new `predictions.js`. Rule of thumb: create new file if function body exceeds 60 lines.
+3. Test the minimum history gate with the single entry in `data/8700138281.json` (2026-03-17) — it has only 1 day of data, gate should block and return a clear message.
 
 ---
 
-*Stack research for: Mixxy — Telegram Finance Bot (Bahasa Indonesia)*
-*Researched: 2026-03-17*
+*Stack research for: Mixxy v1.1 — /prediksi spend prediction feature*
+*Researched: 2026-03-18*

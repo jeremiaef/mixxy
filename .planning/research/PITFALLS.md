@@ -1,8 +1,8 @@
 # Pitfalls Research
 
 **Domain:** Telegram bot + LLM finance assistant (Bahasa Indonesia, Node.js)
-**Researched:** 2026-03-17
-**Confidence:** MEDIUM-HIGH (web access unavailable; based on verified domain knowledge of node-telegram-bot-api, Anthropic API, Node.js file I/O, and Indonesian language parsing patterns)
+**Researched:** 2026-03-18 (updated for v1.1 Behavioral Intelligence milestone)
+**Confidence:** HIGH for integration and LLM math pitfalls; MEDIUM for UX framing patterns
 
 ---
 
@@ -115,7 +115,7 @@ Developers treat the Claude API as reliable during development (low traffic, fas
 - Implement exponential backoff with 3 retries for 429 and 529 responses specifically. Use `Retry-After` header if present.
 - Set a request timeout (e.g., 15 seconds) using `AbortController` or the SDK's timeout option. Claude sometimes hangs on complex prompts.
 - Log all API errors with `update_id` so you can replay missed messages manually if needed.
-- Respect Anthropic's rate limits: for `claude-3-5-haiku` (the right model for this use case), the free tier is ~50 req/min; paid tier is higher but still finite. A burst of users all messaging simultaneously can hit this.
+- Respect Anthropic's rate limits: for `claude-haiku-4-5` (the right model for this use case), the free tier is ~50 req/min; paid tier is higher but still finite. A burst of users all messaging simultaneously can hit this.
 
 **Warning signs:**
 - Process crashes with `UnhandledPromiseRejection` pointing to Claude call.
@@ -192,6 +192,175 @@ Telegram delivers messages as fast as the user types. The event handler is calle
 
 ---
 
+## Spend Prediction Pitfalls (v1.1 Behavioral Intelligence)
+
+These pitfalls are specific to adding `/prediksi` and behavioral intelligence on top of the existing v1.0 tracking foundation.
+
+---
+
+### Pitfall 9: Delegating Arithmetic to Claude — Wrong Totals in Predictions
+
+**What goes wrong:**
+The `/prediksi` prompt sends expense history to Claude and asks it to compute averages, totals, or projected spend per category. Claude returns numbers that look plausible but are arithmetically wrong — off by 10–30% — because LLMs predict the most probable-looking number rather than computing it. A user trusting "bulan depan siapkan Rp 2.1jt" makes a bad financial decision. The error is invisible because the format is correct and the tone is confident.
+
+**Why it happens:**
+LLMs are not calculators. They operate on tokens, not numbers, and arithmetic is pattern-matched rather than computed. Benchmarks confirm Claude Sonnet achieves ~76% accuracy on math tasks — meaning roughly 1 in 4 multi-step calculations is wrong. For personal finance, this is unacceptable. The temptation is to send all data to Claude and ask for the full prediction in one prompt because it is simpler to implement.
+
+**How to avoid:**
+- All aggregation (totals, averages, variance, day-counts) must be computed in JavaScript before the Claude call. Pass computed values to Claude as structured context, not raw transaction arrays.
+- Claude's role in `/prediksi` is **interpretation and framing only**: "Given that the user spent an average of Rp X/month on makan over the last N months, write a one-line prediction message." Never ask Claude to derive numbers.
+- Unit test the Node.js aggregation functions independently with known data before wiring them to the Claude prompt.
+- In the prompt, explicitly forbid Claude from recalculating: "Use only the numbers provided. Do not compute or estimate figures yourself."
+
+**Warning signs:**
+- Prediction totals don't match what you'd get from summing the JSON file manually.
+- Small transaction counts produce obviously wrong predictions (e.g., "siapkan 5jt" when total history is 500rb).
+- Different runs of the same prompt return slightly different numbers.
+
+**Phase to address:** `/prediksi` implementation — never ask Claude to do math, only to narrate pre-computed results.
+
+---
+
+### Pitfall 10: Predicting on Insufficient History — Noise Masquerading as Trend
+
+**What goes wrong:**
+A user with 2 weeks of data runs `/prediksi`. Mixxy confidently says "bulan depan kamu mungkin habis sekitar Rp 800rb untuk makan". The user had two unusually expensive weeks (visiting family, eating out every day). The prediction is statistically meaningless but delivered with the same confident tone as a prediction from 6 months of data. The user either over-prepares or, worse, trusts the bot and under-prepares.
+
+**Why it happens:**
+The 30-day minimum guard defined in PROJECT.md prevents the command from running at all with <30 days data, but 30 days is itself a thin basis for monthly category predictions. One atypical month (Ramadan spending, moving costs, annual bill) dominates the average. The minimum threshold is enforced but not contextually appropriate per category.
+
+**How to avoid:**
+- Enforce the 30-day minimum as a hard gate for the command overall.
+- Per-category: if a category has fewer than 3 data points (3 separate transaction days), flag it as "kurang data" in the output rather than predicting. Do not generate a number.
+- For categories with 1–2 months of data, add a visible caveat: "Prediksi ini berdasarkan data X minggu — makin lama kamu catat, makin akurat."
+- Use month-count, not transaction-count, as the denominator for averages. One month with 50 food entries is still one month's sample.
+- Acknowledge seasonality is unresolvable with <3 months of data — do not predict "fixed" vs "variable" classification confidently with only 1 month of history.
+
+**Warning signs:**
+- User has 32 days of data in a single category from one intense period and gets a high-confidence prediction.
+- The prediction amount is dominated by a single large outlier transaction.
+- A category shows 0 entries one month and 20 the next — classifying it as "variable" is misleading.
+
+**Phase to address:** `/prediksi` data validation layer — build category-level data sufficiency checks before any Claude prompt is constructed.
+
+---
+
+### Pitfall 11: Category Sparsity — Some Categories Have No History
+
+**What goes wrong:**
+The bot has 9 defined categories (`makan`, `transport`, `hiburan`, `tagihan`, `kost`, `pulsa`, `ojol`, `jajan`, `lainnya`). A user who never logs transport expenses gets a prediction that either omits transport (implying Rp 0) or — if Claude is asked to fill gaps — invents a plausible number. Omitting a category makes the total prediction misleadingly low. Inventing a number is hallucination.
+
+**Why it happens:**
+Developers iterate the categories in the stored data and only see what exists. The system has no concept of "categories the user has never used." When Claude is asked "predict all categories," it may infer or fabricate amounts for categories with no data.
+
+**How to avoid:**
+- Define the canonical 9 categories at the application level, not from the data. Iterate all 9 when building the prediction output.
+- For any category with zero history: output "Belum ada data untuk [kategori]" explicitly. Do not send it to Claude to fill in. Do not show Rp 0 without explanation.
+- In the Claude prompt, supply only categories that have actual history. Do not ask Claude about absent categories.
+- The total prediction shown to the user should be labeled "berdasarkan kategori yang dicatat" — not claimed to be a complete picture.
+
+**Warning signs:**
+- Prediction output shows Rp 0 for categories with no explanation.
+- Claude response includes predictions for categories the user never logged.
+- Total prediction is suspiciously round or matches no mathematical relationship to the actual data.
+
+**Phase to address:** `/prediksi` aggregation layer — resolve category presence before the Claude prompt is built.
+
+---
+
+### Pitfall 12: Overconfident Prediction Framing — Users Treat Estimates as Guarantees
+
+**What goes wrong:**
+The bot says "Bulan depan kamu bakal habis sekitar Rp 2.1jt." The user reads "bakal" as a commitment. When actual spending is Rp 2.8jt, they feel misled — not because the prediction was wildly wrong, but because the framing didn't signal uncertainty. Finance apps lose user trust primarily through accuracy mismatches between communicated confidence and actual precision, not through feature gaps.
+
+**Why it happens:**
+The bot's casual register ("bakal", "kira-kira") feels friendly but can read as certain. Developers copy the confirmation tone from expense logging ("Oke, catat!") into predictions without adjusting for the epistemic difference: a logged expense is ground truth; a prediction is a probability distribution compressed into one number.
+
+**How to avoid:**
+- Always frame predictions as estimates with explicit hedging in the Claude prompt output: use "kira-kira", "estimasi", "sekitar" — never "pasti" or "akan habis tepat".
+- Include data basis in the message: "Berdasarkan X bulan terakhir, kira-kira..." This sets user expectations transparently.
+- If variance across months is high (>40% coefficient of variation), add a warning: "Pengeluaran kamu di kategori ini cukup bervariasi, jadi angka ini perkiraan kasar ya."
+- Anthropic's own documentation for reducing hallucinations confirms: explicitly allow Claude to say "I don't have enough information to confidently assess this" — apply this to prediction confidence as well.
+- A practical rule for Telegram bot framing: if a recommendation cannot be explained in one sentence, it is not ready to show. The caveat should be part of the message, not hidden.
+
+**Warning signs:**
+- Users message "kok beda sama prediksinya?" when spending diverges from prediction.
+- Prediction messages contain no hedging language at all.
+- Claude returns a precise number (e.g., "Rp 2.147.500") instead of a rounded estimate.
+
+**Phase to address:** `/prediksi` Claude prompt design — build uncertainty framing into the output template from the start.
+
+---
+
+### Pitfall 13: Fixed vs. Variable Classification Applied to a Single Month's Data
+
+**What goes wrong:**
+Claude classifies `kost` as "fixed" and `makan` as "variable" based on one month of history. This is correct in principle but unreliable in practice: a user who pays rent on the 1st but only started logging on the 15th has zero `kost` entries — Claude classifies it as "variable" or "unknown." A user with only December data appears to have "fixed" food costs because they ate at the same warung every day. The classification is structurally valid but epistemically unsound.
+
+**Why it happens:**
+The feature brief calls for Claude-powered fixed/variable classification. Developers pass category history to Claude and ask for classification without considering that the history sample may be too small to distinguish a fixed charge from a coincidental pattern.
+
+**How to avoid:**
+- Only classify a category as "fixed" if: (a) it appears in at least 2 separate calendar months AND (b) the month-to-month variance is below 15%. Everything else is "variable" or "tidak cukup data".
+- Do not ask Claude to classify from raw transactions — compute month-to-month consistency in JavaScript first, then pass the result to Claude for labeling and explanation only.
+- For the `kost` category specifically, it can be hardcoded as "fixed" if it appears at least once — rent is almost always fixed in Indonesian urban contexts. This avoids the "logged mid-month" false negative.
+- Inform the user when classification is uncertain: "Gue belum bisa bedain mana yang tetap mana yang berubah-ubah, data kamu masih dikit."
+
+**Warning signs:**
+- `kost` classified as "variable" for a user who has been logging for 45 days but started mid-month.
+- `makan` classified as "fixed" for a user with a very regular eating pattern.
+- Classification changes completely between two consecutive months.
+
+**Phase to address:** Fixed/variable classification logic — validate the JavaScript pre-computation criteria before the Claude call.
+
+---
+
+### Pitfall 14: Claude Hallucinating Savings Advice Not Grounded in Actual Data
+
+**What goes wrong:**
+The savings target suggestion ("Kamu bisa hemat Rp X di kategori Z") is generated by Claude without being grounded in the user's actual spending. Claude invents a plausible-sounding but fabricated savings figure, or suggests cutting a category the user barely uses. In financial contexts, hallucinated advice is not just wrong — it can be harmful. A user told "hemat di tagihan" when their `tagihan` spend is already minimal wastes attention on the wrong category.
+
+**Why it happens:**
+Claude's training makes it excellent at producing fluent financial advice. But without explicit grounding in user data, it defaults to generic advice that sounds personalized but isn't. The issue is compounded when the prompt says "suggest where the user can save" without providing the actual category breakdown with enough context to reason from.
+
+**How to avoid:**
+- Savings suggestions must come from the data, not from Claude's general knowledge. Compute which category has the highest discretionary spend variance (month-to-month standard deviation) in JavaScript, then tell Claude: "The category with highest variance is [X] at [amount] average, ranging from [min] to [max]. Write a one-line suggestion about this category."
+- Explicitly forbid Claude from suggesting other categories: "Only suggest savings for the category explicitly named in this prompt."
+- For categories with zero variance (e.g., fixed rent), the correct savings suggestion is "tidak bisa dipotong" — do not ask Claude to generate one.
+- Verify with citations technique from Anthropic's hallucination guidance: after generating a suggestion, the prompt can ask Claude to reference which data point supports it. If it cannot, the suggestion should be discarded.
+
+**Warning signs:**
+- Savings suggestion references a category the user rarely or never logs.
+- The suggested savings amount is unrelated to the variance in that category's actual data.
+- Claude suggests "kurangi pengeluaran makan" for a user whose food spend is the most consistent and lowest-variance category.
+
+**Phase to address:** Savings target feature — ground every suggestion in pre-computed data before the Claude call.
+
+---
+
+### Pitfall 15: The `lainnya` Category Pollutes Predictions
+
+**What goes wrong:**
+`lainnya` is a catch-all for anything that doesn't fit. Over time, it accumulates a heterogeneous mix of one-off large expenses (medical bills, gifts, emergency car repairs) and small uncategorized items. Predicting future `lainnya` spend produces a meaningless and often alarming number because the data is structurally noisy. Worse, when Claude classifies `lainnya` as "variable," it may suggest savings there — where the user has no actionable lever.
+
+**Why it happens:**
+`lainnya` is necessary as a fallback category, but its prediction semantics are different from named categories. Developers treat all categories identically in the prediction loop.
+
+**How to avoid:**
+- Exclude `lainnya` from the fixed/variable classification. It is always "campuran" (mixed) by definition.
+- For prediction, report `lainnya` separately with a note: "Kategori lainnya biasanya susah diprediksi karena isinya beda-beda."
+- Do not include `lainnya` in savings suggestions.
+- Consider omitting `lainnya` from the total prediction and noting the omission: "Total di atas tidak termasuk pengeluaran lainnya."
+
+**Warning signs:**
+- `lainnya` has extremely high variance month-to-month (expected — this is the warning sign you should check for, not fix).
+- The prediction total is dominated by `lainnya`.
+- Claude generates savings advice for `lainnya`.
+
+**Phase to address:** `/prediksi` aggregation — apply special handling for `lainnya` before building the Claude prompt.
+
+---
+
 ## Technical Debt Patterns
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
@@ -203,6 +372,9 @@ Telegram delivers messages as fast as the user types. The event handler is calle
 | No retry logic on Claude API calls | Simpler code | Silent message drops in production | Never — wrap in try/catch minimum, retry for 429/529 |
 | Single global JSON file (not per-user) | Easy to start | Cannot add a second user without migration | Never — PROJECT.md specifies per-user from day 1 |
 | Storing amounts as strings | Avoids parseInt | Arithmetic errors in budget calculations | Never — always store as integer IDR |
+| Asking Claude to compute prediction totals | Simpler one-prompt approach | Wrong numbers 1 in 4 times; undetectable errors | Never — compute in JS, narrate in Claude |
+| Using transaction count as history depth | Easy to compute | 50 transactions in one week ≠ 50 days of history | Never — use calendar day/month span |
+| Skipping per-category data sufficiency check | Less branching logic | Confident predictions on 1 data point | Never — check sufficiency before prompt construction |
 
 ---
 
@@ -214,8 +386,10 @@ Telegram delivers messages as fast as the user types. The event handler is calle
 | node-telegram-bot-api | `bot.on('message')` fires for ALL message types including edited messages | Filter: `bot.on('message')` only, separately handle `bot.on('edited_message')` or ignore it |
 | node-telegram-bot-api | No `bot.on('polling_error')` handler — errors swallowed silently | Always add `bot.on('polling_error', (err) => logger.error(err))` |
 | Claude API | Passing conversation history without trimming — context window overflow | For single-turn expense extraction, pass only the user's message + system prompt (no history needed) |
-| Claude API | Using `claude-3-opus` for simple extraction — 10× cost for no benefit | Use `claude-3-5-haiku` for extraction (fast, cheap); reserve larger models for weekly summaries if needed |
+| Claude API | Using `claude-3-opus` for simple extraction — 10× cost for no benefit | Use `claude-haiku-4-5` for extraction (fast, cheap); reserve larger models for weekly summaries if needed |
 | Claude API | No timeout on fetch — hangs indefinitely on slow responses | Set `timeout: 15000` (15s) in SDK options or use `AbortController` |
+| Claude API | Passing raw expense arrays for prediction — Claude computes numbers | Pre-aggregate in JS; pass summary statistics to Claude for narration only |
+| Claude API | Structured outputs guarantee format, not accuracy | Validate numeric results against the source data even when tool-use is used |
 | Telegram API | Sending long responses — Telegram has 4096 character limit | Truncate or paginate; summaries must fit; Claude must be instructed to be brief |
 | Telegram API | Not handling `bot.sendMessage` rejection (user blocked bot) | Catch `ETELEGRAM 403: Forbidden` — user blocked the bot; log and skip scheduled messages for that user |
 
@@ -230,6 +404,7 @@ Telegram delivers messages as fast as the user types. The event handler is calle
 | Weekly summary cron firing for ALL users at once | 429 rate limits if many users; process spike | Stagger cron: process one user every N seconds; use a queue | ~20+ simultaneous users on free Anthropic tier |
 | Loading all users' JSON files on startup for validation | Slow startup; unnecessary I/O | Load lazily on first message from user | ~100+ user files |
 | Synchronous `fs.readFileSync` in async handler | Blocks event loop during file I/O | Use `fs.promises.readFile` (async) always | Any file > 10KB or any concurrent load |
+| Sending full expense history to Claude for `/prediksi` | Large token usage; slow response; cost spike | Pre-aggregate to monthly category totals before sending; never send raw transaction arrays | Any user with >60 days of data (~300+ transactions) |
 
 ---
 
@@ -242,7 +417,7 @@ Telegram delivers messages as fast as the user types. The event handler is calle
 | ANTHROPIC_API_KEY in source code | Key exposure in git history | Use `.env` only; `.env` in `.gitignore` from commit 1; provide `.env.example` |
 | TELEGRAM_TOKEN in source code | Anyone can control your bot | Same as above |
 | Trusting `from.id` in webhook mode without signature verification | Spoofed updates | In polling mode this is less of an issue (Telegram delivers to your process directly); in webhook mode always verify `X-Telegram-Bot-Api-Secret-Token` header |
-| No rate limiting on per-user Claude calls | A single user spamming can exhaust API quota | Add a simple in-memory per-user rate limit: max N Claude calls per minute |
+| No rate limiting on per-user Claude calls | A single user spamming `/prediksi` can exhaust API quota | Add a simple in-memory per-user rate limit: max N Claude calls per minute; `/prediksi` is especially expensive (large prompt) so rate-limit it separately |
 
 ---
 
@@ -257,11 +432,16 @@ Telegram delivers messages as fast as the user types. The event handler is calle
 | `/hapus` deletes silently with no confirmation | User accidentally deletes wrong entry | Respond with what was deleted: "Oke, dihapus: makan siang 35rb tadi." |
 | Bot does nothing on unrecognised command | User confused | Fall through to expense parsing for non-command messages; for unrecognised `/commands`, reply with a helpful redirect |
 | Error messages in English | Breaks immersion for Indonesian users | All error messages — including technical ones — must be in Bahasa Indonesia |
+| `/prediksi` available before 30 days of data with no explanation | User confused why command doesn't work | Respond with encouraging message: "Data kamu baru X hari. Butuh minimal 30 hari supaya prediksi-nya akurat. Terus catat ya!" |
+| Prediction output omits caveat about accuracy | User treats estimate as guarantee | Every prediction message must include hedging language and data basis: "Berdasarkan X bulan data, kira-kira..." |
+| Savings suggestion is generic, not grounded in user's data | User disengages when advice doesn't match their situation | Only suggest savings for the specific category with highest variance, grounded in computed numbers |
+| Prediction total does not match user's intuition | User loses trust immediately | Round predictions to nearest Rp 10.000; extreme precision (e.g., Rp 2.147.500) implies false accuracy |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
+### v1.0 Foundation (carried forward)
 - [ ] **Expense parsing:** Tested with edge-case Indonesian amounts — "1.5jt", "1,5jt", "35 ribu", "35K", "tiga puluh rb", "sekitar 50rb"
 - [ ] **JSON storage:** Atomic write pattern implemented (write to `.tmp`, then `rename`) — not just `writeFileSync`
 - [ ] **Per-user queue:** Write queue implemented so rapid messages don't race
@@ -272,6 +452,18 @@ Telegram delivers messages as fast as the user types. The event handler is calle
 - [ ] **Telegram message length:** Summary output tested to stay under 4096 characters for large expense histories
 - [ ] **Bot blocked handling:** `ETELEGRAM 403` caught for weekly scheduled messages so cron doesn't crash
 - [ ] **`.env` not committed:** `.gitignore` includes `.env`; `.env.example` is in repo with placeholder values
+
+### v1.1 Spend Prediction (new)
+- [ ] **30-day gate enforced:** `/prediksi` with <30 days returns an encouraging "belum cukup data" message, not an error
+- [ ] **Arithmetic in JS only:** No arithmetic delegated to Claude; all totals, averages, variances computed and unit-tested in Node.js
+- [ ] **Per-category sufficiency:** Categories with <3 data points show "kurang data" label, not a fabricated number
+- [ ] **`lainnya` excluded from savings suggestions:** Prediction output handles `lainnya` separately with "sulit diprediksi" note
+- [ ] **Fixed/variable classification uses month-span:** Classification checks month-count and variance, not transaction count alone
+- [ ] **Prediction framing includes hedging:** Output contains "kira-kira", "estimasi", "berdasarkan X bulan data" — never bare confident figures
+- [ ] **Token budget respected:** Full expense history is not sent to Claude; only pre-aggregated monthly summaries per category
+- [ ] **Savings suggestion grounded:** Suggestion names a specific category derived from variance computation, not Claude's general knowledge
+- [ ] **Rate limiting on `/prediksi`:** Command is rate-limited per user to prevent token abuse (it is a high-cost prompt)
+- [ ] **Output rounding:** Prediction amounts rounded to nearest Rp 10.000 to signal appropriate precision
 
 ---
 
@@ -286,6 +478,8 @@ Telegram delivers messages as fast as the user types. The event handler is calle
 | Webhook registered, bot appears dead | LOW | `curl https://api.telegram.org/bot<TOKEN>/deleteWebhook` to clear; restart in polling mode |
 | System prompt allowed off-topic replies (cost spike) | LOW-MEDIUM | Update prompt; monitor Anthropic usage dashboard for anomalies |
 | User data file for wrong user ID served (path bug) | HIGH | Audit all file path construction; validate user IDs; notify affected users if PII exposed |
+| Wrong prediction totals discovered post-launch | MEDIUM | Identify which path delegated math to Claude; move to JS aggregation; communicate to users that prediction engine was updated |
+| Savings suggestion based on wrong category (Claude hallucinated) | LOW | Add explicit category binding in the prompt; retest; user impact is low if this is a suggestion, not a budget action |
 
 ---
 
@@ -305,20 +499,31 @@ Telegram delivers messages as fast as the user types. The event handler is calle
 | Cron rate limit spike (weekly summary) | Phase 3: Summary Features | Test cron with staggered delay; confirm no 429s |
 | Bot blocked by user (scheduled message) | Phase 3: Summary Features | Simulate 403; confirm cron continues for other users |
 | PII in logs | Phase 1: Foundation | Review log output; confirm no raw message text is logged |
+| Claude computing prediction arithmetic | v1.1 Phase: /prediksi implementation | Unit test aggregation functions; verify Claude prompt contains only pre-computed values |
+| Predicting on insufficient history (<30 days) | v1.1 Phase: /prediksi gate | Test with 5, 20, 29, 30, 31 days of data; confirm gate behavior at each boundary |
+| Category sparsity (0 entries) | v1.1 Phase: /prediksi aggregation | Test user with 5/9 categories populated; confirm absent categories handled correctly |
+| Overconfident prediction framing | v1.1 Phase: Claude prompt for /prediksi | Review all sample outputs; confirm every prediction contains hedging language |
+| Fixed/variable classification on thin data | v1.1 Phase: classification logic | Test with 1 month, 2 months, 3+ months of data; confirm classification only asserted with sufficient history |
+| Claude hallucinating savings advice | v1.1 Phase: savings suggestion | Log the category and amount passed to Claude; verify savings message references the correct category |
+| `lainnya` category pollutes prediction | v1.1 Phase: /prediksi aggregation | Test user with heavy `lainnya` usage; confirm it is separated and excluded from savings suggestions |
+| Full history sent to Claude (token spike) | v1.1 Phase: /prediksi prompt construction | Log token count for /prediksi calls; confirm it stays under 2000 tokens regardless of history length |
 
 ---
 
 ## Sources
 
-- node-telegram-bot-api behavior: known library behavior, documented in GitHub issues (yagop/node-telegram-bot-api) — MEDIUM confidence (verified against library design; specific issue numbers unavailable without web access)
-- Anthropic Claude API error codes (429, 529, 500): documented in Anthropic API reference — HIGH confidence
+- Anthropic "Reduce hallucinations" guide (official): https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/reduce-hallucinations — HIGH confidence
+- Anthropic structured outputs documentation: https://platform.claude.com/docs/en/build-with-claude/structured-outputs — HIGH confidence; confirms format is guaranteed but accuracy is not
+- Mathematical Computation and Reasoning Errors by Large Language Models (AIME-Con 2025, arXiv:2508.09932): Claude Sonnet ~76% math accuracy — MEDIUM confidence (benchmark context differs from production use)
+- "LLMs Can't Calculate: Why You Should Use Tools for Math" (Medium, verified pattern): offload arithmetic to deterministic code — HIGH confidence (consistent with Anthropic guidance)
+- Fintech UX best practices 2026 (eleken.co, g-co.agency): transparency in prediction framing, "if a recommendation can't be explained in one sentence it's not ready" — MEDIUM confidence (editorial sources, consistent across multiple publications)
+- node-telegram-bot-api behavior: known library behavior, documented in GitHub issues (yagop/node-telegram-bot-api) — MEDIUM confidence
 - Telegram Bot API 4096 character limit: official Telegram Bot API documentation — HIGH confidence
 - Telegram Bot API webhook/polling mutual exclusivity: official Telegram Bot API documentation — HIGH confidence
 - Indonesian number notation (period-as-thousands, comma-as-decimal, rb/jt/M suffixes): established Indonesian locale standard — HIGH confidence
 - JSON atomic write pattern (write-then-rename): POSIX standard; well-documented Node.js pattern — HIGH confidence
-- Claude tool-use for structured output reliability over raw text: Anthropic documentation and community practice — HIGH confidence (tool-use is the documented recommended approach for structured extraction)
 - Per-user async queue pattern: standard Node.js concurrency pattern — HIGH confidence
 
 ---
-*Pitfalls research for: Telegram bot + LLM finance assistant (Bahasa Indonesia, Node.js)*
-*Researched: 2026-03-17*
+*Pitfalls research for: Telegram bot + LLM finance assistant — v1.1 Behavioral Intelligence (spend prediction)*
+*Researched: 2026-03-18*

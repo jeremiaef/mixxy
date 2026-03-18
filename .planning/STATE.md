@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 03-commands-and-reporting-04-PLAN.md
-last_updated: "2026-03-17T20:56:18.160Z"
+stopped_at: Completed 03-commands-and-reporting-05-PLAN.md
+last_updated: "2026-03-18T07:56:32.078Z"
 last_activity: 2026-03-17 — Roadmap created; 3 phases derived from requirements
 progress:
   total_phases: 3
   completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 9
+  completed_plans: 9
   percent: 0
 ---
 
@@ -59,6 +59,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03-commands-and-reporting P01 | 2 | 2 tasks | 4 files |
 | Phase 03-commands-and-reporting P03 | 3 | 1 tasks | 2 files |
 | Phase 03-commands-and-reporting P04 | 30 | 2 tasks | 2 files |
+| Phase 03-commands-and-reporting P05 | 5 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -94,6 +95,9 @@ Recent decisions affecting current work:
 - [Phase 03-commands-and-reporting]: budget.js defines local _formatAmount clone — no import from index.js to avoid circular dep risk
 - [Phase 03-commands-and-reporting]: Cron require inside require.main guard — prevents cron firing when index.js required in tests
 - [Phase 03-commands-and-reporting]: _START_MESSAGE and _HELP_MESSAGE exported under underscore-prefix convention for direct unit test access
+- [Phase 03-commands-and-reporting]: detectThreshold boundary changed from curr > 0.8 to curr >= 0.8 — exact 80% now fires alert
+- [Phase 03-commands-and-reporting]: Per-category budgets stored in meta.budgets map coexisting with global meta.budget for backward compat
+- [Phase 03-commands-and-reporting]: checkBudgetAlert lookup priority: per-category (meta.budgets[cat]) > global (meta.budget) > no-op
 
 ### Pending Todos
 
@@ -106,6 +110,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-17T20:56:18.157Z
-Stopped at: Completed 03-commands-and-reporting-04-PLAN.md
+Last session: 2026-03-18T07:56:32.076Z
+Stopped at: Completed 03-commands-and-reporting-05-PLAN.md
 Resume file: None

@@ -27,7 +27,7 @@
 - [x] **SUMM-01**: User can request current month expense summary via /rekap command
 - [x] **SUMM-02**: User can request summaries via natural language (e.g. "rekap bulan ini", "pengeluaran bulan ini berapa?")
 - [x] **SUMM-03**: User can request weekly summary via natural language (e.g. "rekap minggu ini")
-- [ ] **SUMM-04**: Bot auto-sends a weekly spending digest every Sunday (03:00 UTC / 10:00 WIB) via cron
+- [x] **SUMM-04**: Bot auto-sends a weekly spending digest every Sunday (03:00 UTC / 10:00 WIB) via cron
 - [x] **SUMM-05**: Summaries include Claude-generated insights and suggestions (not just raw totals)
 
 ### Budget Alerts
@@ -39,8 +39,8 @@
 
 ### Bot Commands & Onboarding
 
-- [ ] **BOT-01**: /start command delivers onboarding message with concrete examples of how to log expenses in Bahasa Indonesia
-- [ ] **BOT-02**: /help command lists all available commands with short descriptions in Bahasa Indonesia
+- [x] **BOT-01**: /start command delivers onboarding message with concrete examples of how to log expenses in Bahasa Indonesia
+- [x] **BOT-02**: /help command lists all available commands with short descriptions in Bahasa Indonesia
 - [x] **BOT-03**: Bot handles off-topic or unclear messages gracefully — redirects back to finance context without being rude
 
 ## v2 Requirements
@@ -91,14 +91,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SUMM-01 | Phase 3 | Complete |
 | SUMM-02 | Phase 3 | Complete |
 | SUMM-03 | Phase 3 | Complete |
-| SUMM-04 | Phase 3 | Pending |
+| SUMM-04 | Phase 3 | Complete |
 | SUMM-05 | Phase 3 | Complete |
 | BUDG-01 | Phase 3 | Complete |
 | BUDG-02 | Phase 3 | Complete |
 | BUDG-03 | Phase 3 | Complete |
 | BUDG-04 | Phase 3 | Complete |
-| BOT-01 | Phase 3 | Pending |
-| BOT-02 | Phase 3 | Pending |
+| BOT-01 | Phase 3 | Complete |
+| BOT-02 | Phase 3 | Complete |
 | BOT-03 | Phase 2 | Complete |
 
 **Coverage:**
